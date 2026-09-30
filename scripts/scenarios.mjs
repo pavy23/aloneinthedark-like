@@ -1,0 +1,130 @@
+// Side-path scenarios: water hammer ambush, death -> game over -> retry, manual save/continue, phone layout.
+// Usage: npm run build && node scripts/scenarios.mjs
+import { chromium } from 'playwright-core';
+import { spawn } from 'node:child_process';
+import { mkdir } from 'node:fs/promises';
+
+const port = 5400 + Math.floor(Math.random() * 400);
+const server = spawn('node', ['scripts/serve.mjs', 'dist', String(port)], { stdio: 'ignore' });
+await new Promise((r) => setTimeout(r, 400));
+await mkdir('.shots/scen', { recursive: true });
+const browser = await chromium.launch({
+  executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium',
+  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+});
+const errors = [];
+let failed = false;
+const check = (cond, msg) => {
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`);
+  if (!cond) failed = true;
+};
+
+async function open(opts = {}) {
+  const page = await browser.newPage({ viewport: { width: 960, height: 720 }, ...opts });
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text());
+  });
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(`http://localhost:${port}/`);
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(600);
+  return page;
+}
+const info = (page) => page.evaluate(() => window.__btk.info());
+
+// ---------------------------------------------------------------- 1. water hammer brings a creature up
+{
+  const page = await open();
+  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => window.__btk.play('engine', 4.3, 1.4, Math.PI / 2));
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.__btk.game.ui.clearMessages());
+  // Admit steam with the drains shut.
+  await page.evaluate(() => {
+    void window.__btk.game.openPanel('dynamo');
+  });
+  await page.locator('#modal .btn', { hasText: '주증기 밸브 ¼ 열기' }).click();
+  const hammers = (await info(page)).flags['dyn.hammers'];
+  check(hammers === 1, `water hammer registered (hammers=${hammers})`);
+  await page.locator('#modal .btn', { hasText: '물러나기' }).click();
+  for (let i = 0; i < 30; i++) {
+    await page.evaluate(() => window.__btk.game.ui.clearMessages());
+    await page.waitForTimeout(150);
+  }
+  const s = await info(page);
+  check(s.flags.engAmbush === true && s.creatures.some((c) => c.id === 'eng1'), 'water hammer drew a creature up from the bilge');
+  await page.screenshot({ path: '.shots/scen/1-hammer-ambush.png' });
+
+  // ------------------------------------------------------------ 2. let it kill us -> game over -> retry
+  await page.evaluate(() => {
+    const g = window.__btk.game;
+    g.state.hp = 1;
+    const c = g.creatures.find((x) => x.id === 'eng1');
+    g.pl.place(c.x + 0.9, c.z, -Math.PI / 2);
+  });
+  await page.waitForSelector('#modal .gameover', { timeout: 20000 });
+  check(true, 'player death leads to the game-over screen');
+  await page.screenshot({ path: '.shots/scen/2-gameover.png' });
+  await page.locator('#modal .btn', { hasText: '마지막 기록에서 다시' }).click();
+  await page.waitForFunction(() => window.__btk.info().mode === 'play' && !window.__btk.info().ui, null, { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  const r = await info(page);
+  check(r.room === 'engine' && r.hp > 0, `retry restores the autosave (room=${r.room}, hp=${r.hp})`);
+  check(r.flags['dyn.hammers'] === undefined || r.flags['dyn.hammers'] === 0 || r.flags['dyn.hammers'] === 1, 'retry state is a valid saved state');
+  const deaths = await page.evaluate(() => window.__btk.game.state.deaths);
+  check(deaths >= 1, `death counter kept (${deaths})`);
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 3. manual save -> title -> continue
+{
+  const page = await open();
+  await page.evaluate(() => window.__btk.play('cabin', 0.5, 1.5, 0));
+  await page.evaluate(() => {
+    window.__btk.give('crank');
+    window.__btk.setFlags({ safeOpen: true, 'got:crank': true });
+  });
+  await page.keyboard.press('Escape');
+  await page.locator('#modal .btn', { hasText: '기록하기' }).click();
+  await page.locator('#modal .btn', { hasText: '타이틀로' }).click();
+  await page.locator('#modal .btn', { hasText: '예' }).click();
+  await page.waitForTimeout(1200);
+  check((await info(page)).mode === 'title', 'returned to title');
+  const cont = page.locator('#modal .title .btn', { hasText: '이어하기' });
+  check(!(await cont.isDisabled()), 'continue is enabled after saving');
+  await cont.click();
+  await page.waitForTimeout(1200);
+  const s = await info(page);
+  check(s.room === 'cabin' && s.inv.includes('crank') && s.flags.safeOpen === true, 'continue restores room, inventory and flags');
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 4. phone portrait layout with touch controls
+{
+  const page = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  await page.screenshot({ path: '.shots/scen/4-phone-title.png' });
+  await page.evaluate(() => window.__btk.play('corridor', -2.5, 0, Math.PI / 2));
+  await page.evaluate(() => window.__btk.game.ui.clearMessages());
+  await page.waitForTimeout(500);
+  const touchVisible = await page.evaluate(() => !document.getElementById('touch').hidden);
+  check(touchVisible, 'touch controls shown on a touch device');
+  const before = await info(page);
+  // Hold the stick up (forward) for a moment using a real touch-pointer drag.
+  const pad = await page.locator('#touch .pad').boundingBox();
+  await page.mouse.move(pad.x + pad.width / 2, pad.y + pad.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pad.x + pad.width / 2, pad.y + 10, { steps: 4 });
+  await page.waitForTimeout(900);
+  await page.mouse.up();
+  const after = await info(page);
+  check(after.x - before.x > 0.5, `stick moves the investigator forward (${before.x.toFixed(2)} -> ${after.x.toFixed(2)})`);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  check(!overflow, 'no horizontal overflow at phone width');
+  await page.screenshot({ path: '.shots/scen/4-phone-play.png' });
+  await page.close();
+}
+
+console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');
+await browser.close();
+server.kill();
+process.exit(failed || errors.length ? 1 : 0);

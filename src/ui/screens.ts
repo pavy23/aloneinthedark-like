@@ -1,0 +1,315 @@
+import type { Game } from '../game/Game';
+import { latestSave, readSlot, formatTime, type Settings, type SlotId } from '../game/state';
+import { ROOMS } from '../world/rooms';
+import { FocusNav, type Modal } from './UI';
+import { button, h } from './dom';
+
+// ------------------------------------------------------------------ Title
+
+export function openTitle(g: Game): Modal {
+  const has = latestSave() !== null;
+  const menu = h(
+    'div',
+    { class: 'menu' },
+    button('새로 시작', () => {
+      g.ui.pop(modal);
+      void g.newGame();
+    }),
+    button('이어하기', () => {
+      g.ui.pop(modal);
+      void g.continueLatest();
+    }, { disabled: !has }),
+    button('조작법', () => openHelp(g)),
+    button('설정', () => openSettings(g)),
+  );
+  const el = h(
+    'div',
+    { class: 'title' },
+    h(
+      'div',
+      { class: 'mark' },
+      h('h1', { text: '용골 아래' }),
+      h('div', { class: 'en', text: 'BENEATH THE KEEL' }),
+      h('div', { class: 'sub', text: '북대서양 · 1925년 10월' }),
+    ),
+    menu,
+    h('div', { class: 'foot', text: '고정 카메라 3D 탐험·퍼즐 어드벤처 · 모든 그래픽과 사운드는 코드로 생성 · 키보드 / 게임패드 / 터치' }),
+  );
+  const nav = new FocusNav(menu, g.audio);
+  let t = 0;
+  const modal = g.ui.push({
+    el,
+    nav,
+    cancelable: false,
+    // Ignore input for a moment so a key held from the previous screen can't start a new game.
+    update: (dt, input) => {
+      t += dt;
+      if (t < 0.8) return;
+      nav.update(input);
+    },
+  });
+  return modal;
+}
+
+// ------------------------------------------------------------------ Narrative screens
+
+function story(g: Game, dateLine: string, lines: string[], opts: { finalButtons?: Array<[string, () => void]>; bg?: string } = {}): Promise<void> {
+  return new Promise((resolve) => {
+    const lineEls = lines.map((l) => h('p', { class: 'line', text: l }));
+    const skip = h('div', { class: 'skip', text: '계속하려면 Space · 클릭 · 탭' });
+    const buttons = h('div', { class: 'row', style: 'justify-content:center' });
+    const box = h('div', { class: 'story' }, h('div', { class: 'date', text: dateLine }), ...lineEls, skip, buttons);
+    const el = h('div', { class: 'modal', style: `background:${opts.bg ?? 'rgba(0,0,0,0.94)'}` }, box);
+    let shown = 0;
+    let t = 0;
+    let finished = false;
+    let sinceFinish = 0;
+    const nav = new FocusNav(buttons, g.audio);
+    const showNext = () => {
+      if (shown < lineEls.length) {
+        lineEls[shown].classList.add('show');
+        shown++;
+        t = 0;
+        if (shown === lineEls.length) finish();
+      }
+    };
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      for (const l of lineEls) l.classList.add('show');
+      shown = lineEls.length;
+      if (opts.finalButtons) {
+        skip.hidden = true;
+        buttons.replaceChildren(...opts.finalButtons.map(([label, fn]) => button(label, fn)));
+        nav.refresh(false);
+      }
+    };
+    const advance = () => {
+      if (!finished) {
+        if (shown < lineEls.length) showNext();
+        return;
+      }
+      if (!opts.finalButtons) close();
+    };
+    const close = () => {
+      g.ui.pop(modal);
+    };
+    el.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.btn')) return;
+      advance();
+    });
+    const modal: Modal = g.ui.push({
+      el,
+      cancelable: false,
+      update: (dt, input) => {
+        t += dt;
+        if (!finished && t > 1.6) showNext();
+        if (finished && opts.finalButtons) {
+          sinceFinish += dt;
+          if (sinceFinish > 1.0) nav.update(input);
+          return;
+        }
+        if (input.justPressed('action') || input.justPressed('cancel')) {
+          input.consumeAll();
+          advance();
+        }
+      },
+      onClose: () => resolve(),
+    });
+    showNext();
+  });
+}
+
+export async function playIntro(g: Game): Promise<void> {
+  g.audio.setAmbience('title');
+  await story(g, '1925년 10월 11일 · 뉴펀들랜드 남동쪽 해상', [
+    '해저케이블 수리선 탈라사호가 교신을 끊은 지 여드레.',
+    '구난선 마그누스호가 안개 속에서 그 배를 찾아냈다. 불빛 하나 없이, 사람 하나 없이 떠다니는 배를.',
+    '보험조합의 조사관인 나는 작은 보트로 홀로 그 배에 올랐다.',
+    '보트가 떠나자 안개가 모든 것을 삼켰다. 남은 것은 파도 소리와, 발밑 어딘가에서 들려오는 소리뿐이었다.',
+    '세 번, 쉬고, 세 번.',
+  ]);
+}
+
+export async function playEnding(g: Game): Promise<void> {
+  g.audio.setDanger(false);
+  g.audio.setAmbience('title');
+  const st = g.state;
+  await story(
+    g,
+    '1925년 10월 12일 · 새벽',
+    [
+      '검은 돌이 화실의 불 속에서 비명을 질렀다. 배 전체가 한 번 크게 몸을 떨었고, 그다음에는 고요해졌다.',
+      '선수에서 팽팽하던 케이블이 끊어지는 소리가 났다. 무언가가 탈라사호를 놓아주었다.',
+      '동틀 무렵, 안개를 가르며 마그누스호의 기적이 울렸다. 나는 끝까지 불 곁을 지켰다.',
+      '보고서에는 "원인 불명의 해상 사고"라고 적었다. 누구도 그 이상을 묻지 않았다.',
+      '그러나 나는 안다. 그것은 아직 저 아래에 있다. 우리가 잘라낸 것은 손가락 하나였을 뿐이다.',
+      `— 끝 —\n플레이 시간 ${formatTime(st.time)} · 기록 ${st.saves}회 · 죽음 ${st.deaths}회 · 읽은 문서 ${st.docs.length}편`,
+    ],
+    { finalButtons: [['타이틀로', () => g.showTitle()]], bg: 'rgba(8,10,12,0.96)' },
+  );
+}
+
+export function openGameOver(g: Game): void {
+  const el = h(
+    'div',
+    { class: 'modal', style: 'background:rgba(0,0,0,0.9)' },
+    h(
+      'div',
+      { class: 'story gameover' },
+      h('h2', { text: '익사' }),
+      h('p', { text: '차갑고 무거운 손들이 나를 붙잡았다.\n바다 냄새가 폐 속까지 차올랐다.' }),
+      h('div', { class: 'row', style: 'justify-content:center' }),
+    ),
+  );
+  const row = el.querySelector('.row') as HTMLElement;
+  row.append(
+    button('마지막 기록에서 다시', () => {
+      g.ui.pop(modal);
+      void g.retryFromDeath();
+    }),
+    button('타이틀로', () => {
+      g.ui.pop(modal);
+      g.showTitle();
+    }),
+  );
+  const nav = new FocusNav(row, g.audio);
+  const modal = g.ui.push({ el, nav, cancelable: false });
+}
+
+// ------------------------------------------------------------------ Pause, save, load
+
+export function openPause(g: Game): void {
+  g.audio.sfx('ui-ok');
+  const msg = h('p', { class: 'muted', text: `플레이 시간 ${g.playTimeText()} · ${ROOMS[g.state.room].name}` });
+  const list = h(
+    'div',
+    { class: 'menu', style: 'display:flex;flex-direction:column;gap:6px' },
+    button('계속하기', () => g.ui.pop(modal)),
+    button('기록하기', () => {
+      g.save(false);
+      g.audio.sfx('ui-ok');
+      msg.textContent = `기록했다. (${new Date().toLocaleTimeString('ko-KR')})`;
+    }),
+    button('불러오기', () => openLoad(g)),
+    button('조작법', () => openHelp(g)),
+    button('설정', () => openSettings(g)),
+    button('타이틀로', async () => {
+      const ok = await confirmBox(g, '저장하지 않은 진행은 사라집니다. 타이틀로 돌아갈까요?');
+      if (ok) g.showTitle();
+    }),
+  );
+  const panel = h('div', { class: 'panel', style: 'width:min(420px,100%)' }, h('div', { class: 'eyebrow', text: 'PAUSED · 일시정지' }), h('h2', { text: '항해일지를 덮고 숨을 고른다' }), msg, list);
+  const el = h('div', { class: 'modal' }, panel);
+  const nav = new FocusNav(list, g.audio);
+  const modal = g.ui.push({ el, nav });
+}
+
+function confirmBox(g: Game, text: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let result = false;
+    const row = h(
+      'div',
+      { class: 'row' },
+      button('예', () => {
+        result = true;
+        g.ui.pop(modal);
+      }),
+      button('아니오', () => g.ui.pop(modal)),
+    );
+    const el = h('div', { class: 'modal' }, h('div', { class: 'panel', style: 'width:min(420px,100%)' }, h('p', { text }), row));
+    const nav = new FocusNav(row, g.audio, { grid: true });
+    const modal = g.ui.push({ el, nav, onClose: () => resolve(result) });
+  });
+}
+
+function slotLine(slot: SlotId): string {
+  const s = readSlot(slot);
+  if (!s) return '비어 있음';
+  const when = s.savedAt ? new Date(s.savedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  return `${ROOMS[s.room].name} · ${formatTime(s.time)} · ${when}`;
+}
+
+export function openLoad(g: Game): void {
+  const mk = (slot: SlotId, label: string) => {
+    const b = button(`${label} — ${slotLine(slot)}`, async () => {
+      if (!readSlot(slot)) return;
+      g.ui.closeAll();
+      await g.loadGame(slot);
+    });
+    b.disabled = !readSlot(slot);
+    return b;
+  };
+  const list = h('div', { style: 'display:flex;flex-direction:column;gap:6px' }, mk('manual', '수동 기록'), mk('auto', '자동 기록'), button('돌아가기', () => g.ui.pop(modal)));
+  const el = h('div', { class: 'modal' }, h('div', { class: 'panel', style: 'width:min(560px,100%)' }, h('div', { class: 'eyebrow', text: 'LOAD · 불러오기' }), h('p', { class: 'muted', text: '문을 지날 때마다 자동으로 기록됩니다.' }), list));
+  const nav = new FocusNav(list, g.audio);
+  const modal = g.ui.push({ el, nav });
+}
+
+// ------------------------------------------------------------------ Settings & help
+
+export function openSettings(g: Game): void {
+  const s: Settings = { ...g.settings };
+  const rows = h('div', { class: 'kv' });
+  const apply = () => {
+    g.applySettings({ ...s });
+    render();
+  };
+  const cycle = <T,>(label: string, values: T[], cur: () => T, set: (v: T) => void, fmt: (v: T) => string) => {
+    const b = button(fmt(cur()), () => {
+      const i = values.indexOf(cur());
+      set(values[(i + 1) % values.length]);
+      g.audio.sfx('ui-move');
+      apply();
+    });
+    rows.append(h('span', { text: label }), b);
+  };
+  const render = () => {
+    rows.replaceChildren();
+    cycle('해상도', [240, 360, 480] as const as unknown as Array<240 | 360 | 480>, () => s.res, (v) => (s.res = v), (v) => `${(v * 4) / 3}×${v}${v === 240 ? ' (1992)' : ''}`);
+    cycle('디더링', [true, false], () => s.dither, (v) => (s.dither = v), (v) => (v ? '켬' : '끔'));
+    cycle('색 단계', [8, 12, 20, 32, 64], () => s.levels, (v) => (s.levels = v), (v) => `${v}단계${v <= 8 ? ' (EGA 느낌)' : v <= 12 ? ' (VGA 느낌)' : ''}`);
+    cycle('효과음', [0, 0.25, 0.5, 0.8, 1], () => s.volume, (v) => (s.volume = v), (v) => `${Math.round(v * 100)}%`);
+    cycle('음악', [0, 0.35, 0.7, 1], () => s.music, (v) => (s.music = v), (v) => `${Math.round(v * 100)}%`);
+    cycle('조사 힌트', [true, false], () => s.hints, (v) => (s.hints = v), (v) => (v ? '표시' : '숨김 (원작처럼)'));
+    cycle('글자 속도', [24, 42, 80, 400], () => s.textSpeed, (v) => (s.textSpeed = v), (v) => (v >= 400 ? '즉시' : v >= 80 ? '빠름' : v >= 42 ? '보통' : '느림'));
+    cycle('터치 조작', ['auto', 'on', 'off'] as Array<'auto' | 'on' | 'off'>, () => s.touch, (v) => (s.touch = v), (v) => (v === 'auto' ? '자동' : v === 'on' ? '항상 표시' : '숨김'));
+    nav.refresh();
+  };
+  const back = button('닫기', () => g.ui.pop(modal));
+  const panel = h('div', { class: 'panel', style: 'width:min(520px,100%)' }, h('div', { class: 'eyebrow', text: 'SETTINGS · 설정' }), rows, h('div', { class: 'row' }, back));
+  const el = h('div', { class: 'modal' }, panel);
+  const nav = new FocusNav(panel, g.audio);
+  const modal = g.ui.push({ el, nav });
+  render();
+}
+
+export function openHelp(g: Game): void {
+  const kv = (k: string, v: string) => h('div', {}, h('span', { text: v }), h('kbd', { text: k }));
+  const panel = h(
+    'div',
+    { class: 'panel' },
+    h('div', { class: 'eyebrow', text: 'CONTROLS · 조작법' }),
+    h('h2', { text: '탱크식 조작 — 원작 그대로' }),
+    h('p', { class: 'muted', text: '위 키는 캐릭터가 바라보는 방향으로 전진합니다. 카메라가 바뀌어도 조작 방향은 바뀌지 않습니다.' }),
+    h(
+      'div',
+      { class: 'help-grid' },
+      kv('↑ / W', '전진'),
+      kv('↓ / S', '후진'),
+      kv('← → / A D', '제자리 회전'),
+      kv('Shift · ↑ 두 번', '달리기'),
+      kv('↓ + Shift', '뒤로 돌기'),
+      kv('Space / E / Enter', '조사 · 열기 · 줍기 · 밀기'),
+      kv('F / J / Ctrl', '공격 (든 무기, 없으면 발차기)'),
+      kv('I / Tab', '소지품 · 상태'),
+      kv('Esc / P', '일시정지 · 저장'),
+      kv('게임패드', 'A 조사 · X 공격 · Y 소지품 · B 달리기'),
+    ),
+    h('p', { class: 'muted', text: '물건을 쓰려면 그 앞에 서서 소지품에서 "사용"을 고르세요. 문을 지날 때마다 자동 기록됩니다.' }),
+    h('div', { class: 'row' }, button('닫기', () => g.ui.pop(modal))),
+  );
+  const el = h('div', { class: 'modal' }, panel);
+  const nav = new FocusNav(panel, g.audio);
+  const modal = g.ui.push({ el, nav });
+}
