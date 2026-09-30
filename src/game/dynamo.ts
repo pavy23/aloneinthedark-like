@@ -17,8 +17,10 @@ export function getDyn(g: GameAPI): DynamoState {
 export function setDyn(g: GameAPI, s: DynamoState): void {
   g.setFlag('dyn.drain', s.drain);
   g.setFlag('dyn.steam', s.steam);
-  g.setFlag('dyn.warm', Math.round(s.warm * 1000) / 1000);
-  g.setFlag('dyn.rpm', Math.round(s.rpm * 1000) / 1000);
+  // Full precision on purpose: rounding here would swallow the tiny per-frame increments of a
+  // 500 Hz+ display and the line would never warm through.
+  g.setFlag('dyn.warm', s.warm);
+  g.setFlag('dyn.rpm', s.rpm);
   g.setFlag('dyn.hammers', s.hammers);
 }
 

@@ -5,7 +5,7 @@
 
 - 브라우저에서 바로 실행됩니다(설치 불필요). 키보드, 게임패드, 휴대폰 터치를 모두 지원합니다.
 - 그래픽·텍스처·사운드는 **전부 코드로 생성**합니다. 이미지나 오디오 파일은 하나도 없습니다.
-- three.js + TypeScript + Vite. 게임 코드는 TypeScript 약 9,400줄 + CSS 800줄, 배포 번들은 JS 약 210 KB(gzip)입니다.
+- three.js + TypeScript + Vite. 게임 코드는 TypeScript 약 9,600줄 + CSS 800줄, 배포 번들은 JS 약 212 KB(gzip)입니다.
 
 | | | |
 |---|---|---|
@@ -84,10 +84,11 @@ docs/        디자인 문서, 플랫폼 검토, 스크린샷
 ## 테스트
 
 ```bash
-npm test             # 단위 테스트 25개 (충돌, 카메라, A*, 발전기·무선·금고 퍼즐, 세이브 등)
+npm test             # 단위 테스트 29개 (충돌, 카메라, A*, 발전기·무선·금고 퍼즐, 고주사율 프레임, 세이브 등)
 npm run typecheck
 npm run e2e          # 헤드리스 Chromium으로 타이틀부터 엔딩까지 자동 플레이
-node scripts/scenarios.mjs   # 워터해머 매복, 사망→재시작, 저장→이어하기, 휴대폰 터치 조작
+node scripts/scenarios.mjs   # 곁가지 23개 검사: 워터해머 매복, 사망→재시작, 저장→이어하기, 휴대폰 터치, 카메라 사각지대 등
+node scripts/fuzz.mjs        # 모든 방에서 무작위 입력을 퍼부어 예외·멈춤 여부 확인
 ```
 
 E2E 스크립트는 `playwright-core`로 Chromium을 띄웁니다. 기본 경로는 `/opt/pw-browsers/chromium`이며, 다른 경로는 `CHROMIUM_PATH` 환경변수로 지정합니다.

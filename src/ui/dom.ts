@@ -24,6 +24,9 @@ export function button(label: string, onClick: () => void, attrs: Attrs = {}): H
   b.textContent = label;
   b.addEventListener('click', (e) => {
     e.preventDefault();
+    // Keyboard/gamepad navigation is handled by FocusNav; leaving DOM focus here would let Enter
+    // re-trigger this button through the browser's default action.
+    b.blur();
     if (!b.disabled) onClick();
   });
   return b;

@@ -278,7 +278,7 @@ export const engine: RoomDef = {
     if (lastHammers < 0) lastHammers = s.hammers;
     if (s.hammers > lastHammers) {
       lastHammers = s.hammers;
-      if (!g.flag('engAmbush')) {
+      if (!g.flag('engAmbush') && !g.flag('idolBurned')) {
         g.setFlag('engAmbush');
         void (async () => {
           await g.wait(2.5);

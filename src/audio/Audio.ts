@@ -539,6 +539,23 @@ export class AudioSystem {
     }
   }
 
+  /** Low engine beat played *through* a bed's gain, so the bed level controls it. */
+  private thump(bed: Bed): void {
+    const c = this.ctx!;
+    const t = c.currentTime;
+    const s = this.noiseSrc(false);
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 200;
+    const g = c.createGain();
+    this.env(g, t, 0.004, 0.12, 0.05);
+    s.connect(f);
+    f.connect(g);
+    g.connect(bed.gain);
+    s.start(t, Math.random() * 1.5);
+    s.stop(t + 0.1);
+  }
+
   private burstPublic(dur: number, type: BiquadFilterType, freq: number, peak: number): void {
     if (!this.ctx) return;
     this.burst(this.ctx.currentTime, dur, type, freq, 1, peak, 0.3);
@@ -577,7 +594,7 @@ export class AudioSystem {
       this.drone(bed, 140, 'sawtooth', 0.006);
       this.drone(bed, 280, 'sine', 0.01);
       this.loopNoise(bed, 'bandpass', 2000, 6, 0.01);
-      this.every(bed, 0.42, 0.42, () => this.burstPublic(0.05, 'lowpass', 200, 0.12 * level));
+      this.every(bed, 0.42, 0.42, () => this.thump(bed));
     } else if (!on && this.dynamoBed) {
       this.killBed(this.dynamoBed, 0.8);
       this.dynamoBed = null;

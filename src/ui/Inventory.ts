@@ -29,8 +29,16 @@ function getPreview() {
   return preview;
 }
 
+function disposeObject(o: THREE.Object3D): void {
+  o.traverse((c) => {
+    const m = c as THREE.Mesh;
+    if (m.isMesh) m.geometry.dispose();
+  });
+}
+
 function showModel(id: string): void {
   const p = getPreview();
+  for (const c of [...p.holder.children]) disposeObject(c);
   p.holder.clear();
   const def = ITEMS[id];
   if (!def) return;
@@ -82,10 +90,11 @@ export function openInventory(g: Game): Modal {
   const condEl = h('span', { class: `cond ${cond.tone}`, text: cond.label });
   const status = h('div', { class: 'status' }, h('span', { class: 'muted', text: '상태' }), ecg, condEl);
   const equipEl = h('p', { class: 'muted' });
+  const closeBtn = button('닫기', () => g.ui.pop(modal), { class: 'btn close', 'aria-label': '소지품 닫기' });
   const panel = h(
     'div',
     { class: 'panel' },
-    h('div', { class: 'eyebrow', text: 'INVENTORY · 소지품' }),
+    h('div', { class: 'panel-head' }, h('div', { class: 'eyebrow', text: 'INVENTORY · 소지품' }), closeBtn),
     h('div', { class: 'inv' }, h('div', {}, status, equipEl, list), h('div', { class: 'view' }, view, nameEl, descEl, actions)),
   );
   const wrap = h('div', { class: 'modal' }, panel);
@@ -164,7 +173,13 @@ export function openInventory(g: Game): Modal {
           void g.useItem(id);
         }),
       );
-    if (def.kind === 'light') acts.push(button('살펴보기', () => void g.say('랜턴 불꽃이 흔들린다. 등유는 아직 충분하다.')));
+    if (def.kind === 'light')
+      acts.push(
+        button('살펴보기', () => {
+          descEl.textContent = `${def.desc} 불꽃이 흔들린다. 등유는 아직 충분하다.`;
+          g.audio.sfx('ui-ok');
+        }),
+      );
     acts.push(button('돌아가기', () => setMode('list')));
     actions.replaceChildren(...acts);
     actionsNav.refresh(false);
@@ -216,7 +231,11 @@ export function openInventory(g: Game): Modal {
         actionsNav.update(input);
       }
     },
-    onClose: () => cancelAnimationFrame(raf),
+    onClose: () => {
+      cancelAnimationFrame(raf);
+      for (const c of [...p.holder.children]) disposeObject(c);
+      p.holder.clear();
+    },
   });
   wrap.addEventListener('click', (e) => {
     if (e.target === wrap) g.ui.pop(modal);

@@ -275,6 +275,7 @@ export function openRadioPanel(g: Game): Promise<void> {
     let clock = 0;
     let replying = false;
     let failures = g.num('radio.fail');
+    let closed = false;
     const waveEl = h('div', { class: 'val' });
     const cur = h('div', { class: 'morse-out' });
     const out = h('div', { class: 'morse-out' });
@@ -340,6 +341,12 @@ export function openRadioPanel(g: Game): Promise<void> {
       log.textContent = '응답이다! "R R — 탈라사, 위치 확인. 안개 걷히는 대로 새벽에 접근. 불을 지켜라 — 마그누스."';
       replying = false;
       g.note('마그누스호에 조난 신호가 전달되었다');
+      // The wireless room script checks for the ending when the panel closes; if the player already
+      // walked away from the set while the reply was coming in, finish from here.
+      if (closed && g.flag('idolBurned')) {
+        await g.say('수화기 너머로 마그누스호의 응답이 들려왔다. 이제 할 일은 끝났다.');
+        await g.ending();
+      }
     };
     const key = h('button', { class: 'btn morse-key', type: 'button', text: '전건 (누르고 있기)' }) as HTMLButtonElement;
     let source: 'kbd' | 'ptr' | null = null;
@@ -404,7 +411,10 @@ export function openRadioPanel(g: Game): Promise<void> {
           if (idle > 0.9) commit();
         }
       },
-      onClose: () => resolve(),
+      onClose: () => {
+        closed = true;
+        resolve();
+      },
     });
     setWave(wave);
     paint();

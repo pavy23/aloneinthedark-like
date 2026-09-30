@@ -710,8 +710,11 @@ export function coalHeap(r = 1.1): THREE.Group {
  */
 export function cableTank(r: number, waterY: number): THREE.Group {
   const g = new THREE.Group();
-  const wall = mesh(new THREE.CylinderGeometry(r, r, 3.2, 28, 1, true), M.steel);
-  (wall.material as THREE.Material).side = THREE.DoubleSide;
+  // Double-sided copies (never mutate the shared palette materials).
+  const steel2 = M.steel.m.clone();
+  steel2.side = THREE.DoubleSide;
+  steel2.userData.shared = false;
+  const wall = mesh(new THREE.CylinderGeometry(r, r, 3.2, 28, 1, true), steel2);
   wall.position.y = -1.3;
   g.add(wall);
   const rim = mesh(new THREE.TorusGeometry(r, 0.08, 4, 28), M.iron);
@@ -719,8 +722,10 @@ export function cableTank(r: number, waterY: number): THREE.Group {
   rim.position.y = 0.3;
   g.add(rim);
   // Coamings stand a little above the walkway.
-  const coam = mesh(new THREE.CylinderGeometry(r + 0.05, r + 0.05, 0.3, 28, 1, true), M.steelDark);
-  (coam.material as THREE.Material).side = THREE.DoubleSide;
+  const dark2 = M.steelDark.m.clone();
+  dark2.side = THREE.DoubleSide;
+  dark2.userData.shared = false;
+  const coam = mesh(new THREE.CylinderGeometry(r + 0.05, r + 0.05, 0.3, 28, 1, true), dark2);
   coam.position.y = 0.15;
   g.add(coam);
   // Coiled cable "flakes" just below the water.

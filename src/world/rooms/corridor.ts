@@ -220,7 +220,7 @@ export const corridor: RoomDef = {
       id: 'lightsOnAmbush',
       rect: rect(-5, -1.1, 4, 1.1),
       once: true,
-      enabled: (gg) => gg.hasPower(),
+      enabled: (gg) => gg.hasPower() && !gg.flag('idolBurned'),
       onEnter: async (gg) => {
         gg.sfx('creak', { volume: 1.2 });
         await gg.wait(0.4);
@@ -235,7 +235,7 @@ export const corridor: RoomDef = {
       // Still prowling: appear at whichever end of the alleyway is farthest from where we came in.
       const spots: Array<[number, number]> = [
         [7.5, -2.3],
-        [-6.9, 1.1],
+        [-6.2, 1.3],
         [-1.0, 0.0],
       ];
       const [x, z] = spots.reduce((best, p) => (Math.hypot(p[0] - g.player.x, p[1] - g.player.z) > Math.hypot(best[0] - g.player.x, best[1] - g.player.z) ? p : best));

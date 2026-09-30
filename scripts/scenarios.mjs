@@ -21,6 +21,7 @@ const check = (cond, msg) => {
 
 async function open(opts = {}) {
   const page = await browser.newPage({ viewport: { width: 960, height: 720 }, ...opts });
+  page.setDefaultTimeout(15000);
   page.on('console', (m) => {
     if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text());
   });
@@ -37,6 +38,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   const page = await open();
   await page.evaluate(() => localStorage.clear());
   await page.evaluate(() => window.__btk.play('engine', 4.3, 1.4, Math.PI / 2));
+  await page.evaluate(() => window.__btk.game.save(true)); // as if we had just come through the door
   await page.waitForTimeout(1500);
   await page.evaluate(() => window.__btk.game.ui.clearMessages());
   // Admit steam with the drains shut.
@@ -124,7 +126,75 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   await page.close();
 }
 
-// ---------------------------------------------------------------- 5. every reachable spot is covered by a camera
+// ---------------------------------------------------------------- 5. review regressions
+{
+  const page = await open();
+  // (a) Burn the idol first, then send SOS and walk away from the set while the reply is coming in.
+  await page.evaluate(() => window.__btk.play('radio', 0.3, 1.45, 0));
+  await page.evaluate(() => {
+    window.__btk.setFlags({ power: true, idolBurned: true, radioIntro: true });
+    window.__btk.game.ui.clearMessages();
+    void window.__btk.game.openPanel('radio');
+  });
+  await page.waitForSelector('#modal .radio-wave');
+  for (let i = 0; i < 12; i++) await page.locator('#modal .btn', { hasText: '−100' }).click();
+  for (const [sym, n] of [['· 단점', 3], ['− 장점', 3], ['· 단점', 3]]) {
+    for (let i = 0; i < n; i++) await page.locator('#modal .btn', { hasText: sym }).click();
+    await page.locator('#modal .btn', { hasText: '글자 확정' }).click();
+  }
+  await page.keyboard.press('Escape'); // leave during "수화기에 귀를 기울인다…"
+  for (let i = 0; i < 40 && (await info(page)).mode !== 'ending'; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  check((await info(page)).mode === 'ending', 'SOS sent last (panel closed early) still reaches the ending');
+
+  // (b) Drinking brandy while standing next to scenery works.
+  await page.evaluate(() => window.__btk.play('bridge', 0, 0.75, 0));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => {
+    const g = window.__btk.game;
+    g.ui.clearMessages();
+    window.__btk.give('brandy1');
+    g.state.hp = 2;
+  });
+  const hint = (await info(page)).hint;
+  await page.evaluate(() => {
+    void window.__btk.game.useItem('brandy1');
+  });
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(120);
+  }
+  const hp = (await info(page)).hp;
+  check(hp === 5, `brandy works next to scenery (facing "${hint}", hp 2 -> ${hp})`);
+
+  // (c) The inventory has a visible close button (touch players).
+  await page.evaluate(() => window.__btk.game.ui.clearMessages());
+  await page.waitForFunction(() => !window.__btk.info().busy && !window.__btk.info().ui).catch(async () => {
+    console.log('DEBUG state', JSON.stringify(await info(page)).slice(0, 400));
+    console.log('DEBUG stack', await page.evaluate(() => window.__btk.game.ui.stack.map((m) => m.el.className + ':' + m.el.textContent.slice(0, 40))));
+    console.log('DEBUG msg', await page.evaluate(() => [window.__btk.game.ui.msgEl.hidden, window.__btk.game.ui.msgText.textContent]));
+  });
+  await page.keyboard.press('i');
+  await page.locator('#modal .inv').waitFor();
+  await page.locator('#modal .btn.close').click();
+  await page.waitForTimeout(200);
+  check((await page.locator('#modal .inv').count()) === 0, 'inventory closes with its 닫기 button');
+
+  // (d) Starting a new game over an existing save asks first.
+  await page.evaluate(() => window.__btk.game.save(false));
+  await page.evaluate(() => window.__btk.game.showTitle());
+  await page.waitForTimeout(1000);
+  await page.locator('#modal .title .btn', { hasText: '새로 시작' }).click();
+  const asked = await page.locator('#modal .panel', { hasText: '저장된 기록이 있습니다' }).count();
+  await page.locator('#modal .btn', { hasText: '아니오' }).click();
+  await page.waitForTimeout(200);
+  check(asked === 1 && (await info(page)).mode === 'title', 'new game over a save asks for confirmation (and can be declined)');
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 6. every reachable spot is covered by a camera
 {
   const page = await open();
   for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold']) {

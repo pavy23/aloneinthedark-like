@@ -53,7 +53,7 @@ export class Input {
       const btns = KEYMAP[e.code];
       if (btns) {
         // Stop the page scrolling / tabbing away while playing.
-        if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code === 'Tab' || e.code === 'Backspace') {
+        if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Tab' || e.code === 'Backspace') {
           const tag = (e.target as HTMLElement | null)?.tagName;
           if (tag !== 'INPUT' && tag !== 'TEXTAREA') e.preventDefault();
         }

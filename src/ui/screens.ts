@@ -11,7 +11,11 @@ export function openTitle(g: Game): Modal {
   const menu = h(
     'div',
     { class: 'menu' },
-    button('새로 시작', () => {
+    button('새로 시작', async () => {
+      if (has) {
+        const ok = await confirmBox(g, '저장된 기록이 있습니다. 새로 시작하면 처음 문을 지날 때 자동 기록이 새 게임으로 바뀝니다(수동 기록은 남습니다). 새로 시작할까요?');
+        if (!ok) return;
+      }
       g.ui.pop(modal);
       void g.newGame();
     }),

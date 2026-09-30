@@ -105,11 +105,6 @@ export function look(b: RoomBuilder, id: string, x: number, z: number, label: st
       const ls = typeof lines === 'function' ? lines(g) : lines;
       await g.say(...ls);
     },
-    onItem: async (g, item) => {
-      if (item === '@attack') return false;
-      await g.say('그건 여기서 쓸모가 없을 것 같다.');
-      return true;
-    },
   });
 }
 

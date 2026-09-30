@@ -281,6 +281,16 @@ body {
   letter-spacing: 0.08em;
   text-wrap: balance;
 }
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1em;
+}
+.panel-head .close {
+  font-size: 0.8em;
+  padding: 0.25em 0.8em;
+}
 .panel .eyebrow {
   font-family: var(--font-label);
   color: var(--brass);

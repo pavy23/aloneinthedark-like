@@ -14,6 +14,7 @@ function lambert(key: string, color: THREE.ColorRepresentation, map?: THREE.Text
   if (hit) return hit;
   const m = new THREE.MeshLambertMaterial({ color, map: map ?? null, flatShading: true, ...extra });
   m.name = key;
+  m.userData.shared = true;
   const out = { m, tile };
   cache.set(key, out);
   return out;
@@ -24,6 +25,7 @@ function basic(key: string, color: THREE.ColorRepresentation, extra: THREE.MeshB
   if (hit) return hit;
   const m = new THREE.MeshBasicMaterial({ color, ...extra });
   m.name = key;
+  m.userData.shared = true;
   const out = { m, tile: 1 };
   cache.set(key, out);
   return out;
@@ -101,6 +103,7 @@ export const M = {
     ctx.fillRect(0, 0, 32, 32);
     const t = new THREE.CanvasTexture(c);
     const m = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
+    m.userData.shared = true;
     const out = { m, tile: 1 };
     cache.set('shadow', out);
     return out;
@@ -114,6 +117,7 @@ export function flat(color: THREE.ColorRepresentation, emissive: THREE.ColorRepr
   if (hit) return hit.m as THREE.MeshLambertMaterial;
   const m = new THREE.MeshLambertMaterial({ color, emissive, flatShading: true });
   m.name = key;
+  m.userData.shared = true;
   cache.set(key, { m, tile: 1 });
   return m;
 }

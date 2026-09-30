@@ -108,6 +108,10 @@ export class Player {
   setWeapon(id: string | null, spec: WeaponSpec | null): void {
     this.weaponId = id;
     this.weapon = spec ?? KICK;
+    this.weaponMesh.traverse((c) => {
+      const m = c as THREE.Mesh;
+      if (m.isMesh) m.geometry.dispose();
+    });
     this.weaponMesh.clear();
     if (!id) return;
     if (id === 'crowbar') {
@@ -130,6 +134,7 @@ export class Player {
     this.x = x;
     this.z = z;
     this.heading = h;
+    this.deathT = 0;
     this.state = 'idle';
     this.stateTime = 0;
     this.sync();
@@ -150,6 +155,7 @@ export class Player {
 
   setState(s: PlayerState): void {
     if (this.state === s) return;
+    if (this.state === 'dead') return; // only place() brings the investigator back
     this.state = s;
     this.stateTime = 0;
     this.hitDone = false;

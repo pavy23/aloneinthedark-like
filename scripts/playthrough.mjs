@@ -353,7 +353,10 @@ const fight = async (maxMs = 30000) => {
     if (alive.length === 0) return true;
     if (st.hp <= 2) {
       const heal = st.inv.find((i) => i.startsWith('brandy'));
-      if (heal) await page.evaluate((id) => window.__btk.game.useItem(id), heal);
+      if (heal)
+        await page.evaluate((id) => {
+          void window.__btk.game.useItem(id);
+        }, heal);
       await T('skip');
     }
     const c = alive.sort((a, b) => Math.hypot(a.x - st.x, a.z - st.z) - Math.hypot(b.x - st.x, b.z - st.z))[0];

@@ -50,6 +50,7 @@ export class Game implements GameAPI {
   camOverride: CameraDef | null = null;
   private lookTarget = new THREE.Vector3();
   private busyCount = 0;
+  private epoch = 0;
   private waits: Wait[] = [];
   private shakeAmt = 0;
   private shakeT = 0;
@@ -204,13 +205,30 @@ export class Game implements GameAPI {
 
   // ------------------------------------------------------------------ title / new game / load
 
+  /** Clear per-run presentation state so nothing leaks from one run (or load) into the next. */
+  private resetTransient(): void {
+    this.epoch++;
+    this.busyCount = 0;
+    this.waits = [];
+    this.dead = false;
+    this.transitioning = false;
+    this.camOverride = null;
+    this.shakeAmt = 0;
+    this.shakeT = 0;
+    this.flashAmt = 0;
+    this.heartbeat = 0;
+    this.renderer.flash = 0;
+    this.renderer.pulse = 0;
+    this.lights.powerFlicker = 0;
+    this.pl.frozen = false;
+    this.pl.setWeapon(null, null);
+  }
+
   showTitle(): void {
     this.mode = 'title';
     this.ui.closeAll();
     this.clearCreatures();
-    this.busyCount = 0;
-    this.waits = [];
-    this.dead = false;
+    this.resetTransient();
     this.state = newState();
     this.loadRoom('deck');
     this.pl.object.visible = false;
@@ -224,13 +242,14 @@ export class Game implements GameAPI {
   async newGame(): Promise<void> {
     this.audio.unlock();
     this.ui.closeAll();
+    this.resetTransient();
     this.state = newState();
     this.visitedCaption.clear();
     await Screens.playIntro(this);
     this.mode = 'play';
     this.pl.object.visible = true;
-    this.dead = false;
-    await this.enterRoom('deck', 'start', true);
+    // No autosave yet: an accidental "new game" must not wipe the previous run's autosave.
+    await this.enterRoom('deck', 'start', { caption: true, autosave: false });
     void this.run(async () => {
       this.audio.sfx('foghorn', { volume: 0.7 });
       await this.wait(0.6);
@@ -251,14 +270,14 @@ export class Game implements GameAPI {
   async loadState(s: GameState): Promise<void> {
     this.audio.unlock();
     this.ui.closeAll();
+    this.clearCreatures();
+    this.resetTransient();
     this.state = s;
     this.mode = 'play';
-    this.dead = false;
-    this.busyCount = 0;
-    this.waits = [];
     this.pl.object.visible = true;
     this.pl.setWeapon(s.equipped, s.equipped ? (ITEMS[s.equipped]?.weapon ?? null) : null);
-    await this.enterRoom(s.room, s.spawn, true, { x: s.x, z: s.z, h: s.h });
+    // Loading must not overwrite the (possibly newer) autosave.
+    await this.enterRoom(s.room, s.spawn, { caption: true, autosave: false, pos: { x: s.x, z: s.z, h: s.h } });
   }
 
   /** Current progress, for the host page's live-update hook. */
@@ -301,10 +320,15 @@ export class Game implements GameAPI {
   }
 
   /** Build a room, place the player and kick off the room's entry script (not awaited). */
-  private async enterRoom(id: RoomId, spawn: string | null, fromLoad: boolean, pos?: { x: number; z: number; h: number }): Promise<void> {
+  private async enterRoom(
+    id: RoomId,
+    spawn: string | null,
+    opts: { caption: boolean; autosave: boolean; pos?: { x: number; z: number; h: number } },
+  ): Promise<void> {
     this.loadRoom(id);
     const def = ROOMS[id];
     const sp = (spawn && def.spawns[spawn]) || Object.values(def.spawns)[0];
+    const pos = opts.pos;
     if (pos) this.pl.place(pos.x, pos.z, pos.h);
     else this.pl.place(sp.x, sp.z, sp.h);
     this.state.room = id;
@@ -316,11 +340,11 @@ export class Game implements GameAPI {
     this.updateCamera(0, true);
     this.audio.setAmbience(def.ambience);
     this.audio.setDynamo(this.hasPower(), id === 'engine' ? 1 : 0.0001);
-    if (!this.visitedCaption.has(id) || fromLoad) {
+    if (!this.visitedCaption.has(id) || opts.caption) {
       this.visitedCaption.add(id);
       this.ui.caption(def.name, captionSub(id));
     }
-    this.save(true);
+    if (opts.autosave) this.save(true);
     const onEnter = def.onEnter;
     if (onEnter) void this.run(async () => onEnter(this, this.current!, spawn ?? ''));
   }
@@ -333,7 +357,8 @@ export class Game implements GameAPI {
     try {
       if (sfx !== 'none') this.audio.sfx(sfx);
       await this.fadeTo(1, 0.45);
-      await this.enterRoom(room, spawn, false);
+      if (this.dead) return;
+      await this.enterRoom(room, spawn, { caption: false, autosave: true });
       await this.fadeTo(0, 0.45);
     } finally {
       this.busyCount = Math.max(0, this.busyCount - 1);
@@ -392,7 +417,7 @@ export class Game implements GameAPI {
     const others = this.creatures.filter((c) => c.active).map((c) => c.circle());
     this.pl.update(dt, this.busy || this.dead ? null : inp, room.col, others, this.gameTime);
     this.updatePushables(dt);
-    this.updateCreatures(dt);
+    if (!this.transitioning) this.updateCreatures(dt);
     if (!this.busy && !this.dead) this.checkTriggers();
     this.updateCamera(dt, false);
     this.updateHint();
@@ -801,18 +826,28 @@ export class Game implements GameAPI {
     return this.state.equipped;
   }
 
+  /**
+   * Scripts await dialogue, timers and panels. Loading a game, returning to the title or retrying after
+   * death starts a new "epoch": anything a script from an older epoch was waiting on then never resumes,
+   * so a stale script cannot hand out items, spawn creatures or trigger the ending in the new game.
+   */
+  private guard<T>(p: Promise<T>): Promise<T> {
+    const e = this.epoch;
+    return p.then((v) => (e === this.epoch ? v : new Promise<T>(() => undefined)));
+  }
+
   say(...lines: string[]): Promise<void> {
-    return this.ui.say(lines);
+    return this.guard(this.ui.say(lines));
   }
 
   ask(text: string, options: ChoiceOption[]): Promise<number> {
-    return this.ui.ask(text, options);
+    return this.guard(this.ui.ask(text, options));
   }
 
   async readDoc(id: string): Promise<void> {
     if (!this.state.docs.includes(id)) this.state.docs.push(id);
     this.audio.sfx('doc');
-    await openDoc(this, id);
+    await this.guard(openDoc(this, id));
   }
 
   sfx(name: string, opts: { volume?: number; x?: number; z?: number } = {}): void {
@@ -825,13 +860,12 @@ export class Game implements GameAPI {
   }
 
   wait(seconds: number): Promise<void> {
-    return new Promise((resolve) => this.waits.push({ t: seconds, resolve }));
+    return this.guard(new Promise((resolve) => this.waits.push({ t: seconds, resolve })));
   }
 
   async openPanel(kind: 'safe' | 'dynamo' | 'radio'): Promise<void> {
-    if (kind === 'safe') await openSafePanel(this);
-    else if (kind === 'dynamo') await openDynamoPanel(this);
-    else await openRadioPanel(this);
+    const p = kind === 'safe' ? openSafePanel(this) : kind === 'dynamo' ? openDynamoPanel(this) : openRadioPanel(this);
+    await this.guard(p);
   }
 
   cutTo(cam: CameraDef | null): void {
@@ -877,6 +911,7 @@ export class Game implements GameAPI {
   }
 
   save(auto = false): void {
+    if (this.dead || this.state.hp <= 0) return;
     this.state.x = this.pl.x;
     this.state.z = this.pl.z;
     this.state.h = this.pl.heading;
@@ -886,7 +921,7 @@ export class Game implements GameAPI {
   }
 
   async ending(): Promise<void> {
-    if (this.mode === 'ending') return;
+    if (this.mode === 'ending' || this.dead) return;
     this.mode = 'ending';
     this.clearCreatures();
     await Screens.playEnding(this);
@@ -933,7 +968,7 @@ export class Game implements GameAPI {
       },
       state: () => this.state,
       teleport: async (room: RoomId, x: number, z: number, h = 0) => {
-        await this.enterRoom(room, Object.keys(ROOMS[room].spawns)[0], false);
+        await this.enterRoom(room, Object.keys(ROOMS[room].spawns)[0], { caption: false, autosave: false });
         this.pl.place(x, z, h);
         this.renderer.fade = 0;
         this.updateCamera(0, true);
@@ -945,7 +980,9 @@ export class Game implements GameAPI {
         this.busyCount = 0;
         this.waits = [];
         this.pl.object.visible = true;
-        await this.enterRoom(room, Object.keys(ROOMS[room].spawns)[0], false);
+        this.clearCreatures();
+        this.resetTransient();
+        await this.enterRoom(room, Object.keys(ROOMS[room].spawns)[0], { caption: false, autosave: false });
         if (x !== undefined && z !== undefined) this.pl.place(x, z, h);
         this.renderer.fade = 0;
         this.camOverride = null;

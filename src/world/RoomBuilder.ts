@@ -227,10 +227,13 @@ export class RoomBuilder implements RoomBuilderAPI {
   }
 }
 
-/** Dispose all GPU geometry below an object (materials are shared and cached, so they are kept). */
+/** Dispose GPU resources below an object. Cached palette materials (userData.shared) are kept. */
 export function disposeTree(obj: THREE.Object3D): void {
   obj.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (m.isMesh) m.geometry.dispose();
+    if (!m.isMesh) return;
+    m.geometry.dispose();
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of mats) if (mat && !mat.userData.shared) mat.dispose();
   });
 }
