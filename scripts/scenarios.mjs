@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 
 const port = 5400 + Math.floor(Math.random() * 400);
-const server = spawn('node', ['scripts/serve.mjs', 'dist', String(port)], { stdio: 'ignore' });
+const server = spawn('node', ['scripts/serve.mjs', process.env.E2E_ROOT ?? 'dist', String(port)], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 400));
 await mkdir('.shots/scen', { recursive: true });
 const browser = await chromium.launch({
@@ -121,6 +121,55 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   check(!overflow, 'no horizontal overflow at phone width');
   await page.screenshot({ path: '.shots/scen/4-phone-play.png' });
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 5. every reachable spot is covered by a camera
+{
+  const page = await open();
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold']) {
+    await page.evaluate((r) => window.__btk.play(r), room);
+    await page.waitForTimeout(150);
+    const res = await page.evaluate(() => {
+      const room = window.__btk.game.current;
+      const b = room.def.bounds;
+      const step = 0.2;
+      const W = Math.ceil((b.maxX - b.minX) / step);
+      const H = Math.ceil((b.maxZ - b.minZ) / step);
+      const at = (i, j) => [b.minX + (i + 0.5) * step, b.minZ + (j + 0.5) * step];
+      const free = (x, z) => room.col.pointFree(x, z, 0.27);
+      const seen = new Uint8Array(W * H);
+      const queue = [];
+      for (const sp of Object.values(room.def.spawns)) {
+        const i = Math.floor((sp.x - b.minX) / step);
+        const j = Math.floor((sp.z - b.minZ) / step);
+        if (i >= 0 && j >= 0 && i < W && j < H && !seen[j * W + i]) {
+          seen[j * W + i] = 1;
+          queue.push([i, j]);
+        }
+      }
+      let reach = 0;
+      const miss = [];
+      const inZone = (x, z) => room.def.cameras.some((c) => c.zones.some((r) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ));
+      while (queue.length) {
+        const [i, j] = queue.pop();
+        const [x, z] = at(i, j);
+        reach++;
+        if (!inZone(x, z)) miss.push([+x.toFixed(1), +z.toFixed(1)]);
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di;
+          const nj = j + dj;
+          if (ni < 0 || nj < 0 || ni >= W || nj >= H || seen[nj * W + ni]) continue;
+          const [nx, nz] = at(ni, nj);
+          if (!free(nx, nz) || !free((x + nx) / 2, (z + nz) / 2)) continue;
+          seen[nj * W + ni] = 1;
+          queue.push([ni, nj]);
+        }
+      }
+      return { reach, miss: miss.length, sample: miss.slice(0, 6) };
+    });
+    check(res.miss === 0 && res.reach > 50, `${room}: all ${res.reach} reachable cells are covered by a camera${res.miss ? ` (uncovered ${res.miss}: ${JSON.stringify(res.sample)})` : ''}`);
+  }
   await page.close();
 }
 

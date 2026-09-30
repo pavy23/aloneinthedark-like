@@ -11,6 +11,11 @@ export interface Gap {
   w: number;
   /** Opening height (default: full height, i.e. no lintel). */
   h?: number;
+  /**
+   * Walk-through opening. By default openings are doorways you *use* (a scripted room change), so they
+   * still block movement; only set this for real passages.
+   */
+  open?: boolean;
 }
 
 export interface WallOpts {
@@ -135,6 +140,14 @@ export class RoomBuilder implements RoomBuilderAPI {
       const b = Math.min(L, g.at + g.w / 2);
       if (a > cursor) pieces.push([cursor, a, 0, o.h]);
       if (g.h !== undefined && g.h < o.h) pieces.push([a, b, g.h, o.h - g.h]);
+      // Doorways are used, not walked through: keep them solid for collision.
+      if (o.collide !== false && !g.open) {
+        const mid = (a + b) / 2;
+        const cx = x0 + ux * mid;
+        const cz = z0 + uz * mid;
+        if (isAxisAligned(ry)) this.footprint(cx, cz, b - a, t, ry, o.tag);
+        else this.col.addSegment(x0 + ux * a, z0 + uz * a, x0 + ux * b, z0 + uz * b, o.tag);
+      }
       cursor = b;
     }
     if (cursor < L) pieces.push([cursor, L, 0, o.h]);

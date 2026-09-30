@@ -77,6 +77,7 @@ export const engine: RoomDef = {
     { id: 'stokehold', pos: [-6.5, 3.9, -0.6], look: [1.0, 1.2, 4.6], fov: 58, zones: [rect(-7, 0.6, 7, 4.3)], priority: 1 },
     { id: 'wtdoor', pos: [-1.1, 4.6, 1.3], look: [-6.5, 0.9, -4.0], fov: 56, zones: [rect(-7, -7.5, -1.7, 1.0)] },
     { id: 'aft', pos: [2.9, 3.6, -2.2], look: [-3.5, 0.8, -6.6], fov: 58, zones: [rect(-1.9, -7.5, 2.6, -4.3)] },
+    { id: 'engineSide', pos: [1.9, 4.3, -7.2], look: [0.9, 0.8, 0.2], fov: 55, zones: [rect(0.8, -4.5, 2.4, 0.8)] },
   ],
   build(b, g) {
     const H = 6.5;
@@ -99,6 +100,16 @@ export const engine: RoomDef = {
       b.footprint(x, 5.85, 3.4, 3.3);
       b.light({ x, y: 1.1, z: 3.3, color: 0xff7a2e, intensity: 16, distance: 11, flicker: 0.6 });
     }
+    // Coal bunker bulkheads between and beside the boilers (with bunker doors), closing the stokehold.
+    for (const [x0, x1] of [
+      [-7, -4.9],
+      [-1.5, 0.9],
+      [4.3, 7],
+    ] as const) {
+      b.wall(x0, 4.35, x1, 4.35, { h: 3.6, mat: M.steelDark, t: 0.14 });
+    }
+    b.add(P.shipDoor(0.7, 1.6, M.rust), -0.3, 0, 4.28, 0);
+    b.add(P.shipDoor(0.7, 1.6, M.rust), -5.95, 0, 4.28, 0);
     b.add(P.coalHeap(1.0), -5.8, 0, 2.4, 0);
     b.circle(-5.8, 2.4, 0.9);
     // Steam main from the boilers over to the engine and the dynamo
