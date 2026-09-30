@@ -63,6 +63,13 @@ export class AudioSystem {
     }
   }
 
+  /** Pause all sound while the page is hidden (the game loop stops too). */
+  setHidden(hidden: boolean): void {
+    if (!this.ctx) return;
+    if (hidden) void this.ctx.suspend();
+    else void this.ctx.resume();
+  }
+
   setVolume(v: number): void {
     this.volume = v;
     if (this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);

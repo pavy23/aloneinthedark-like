@@ -95,6 +95,7 @@ export class Game implements GameAPI {
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock, { once: false, passive: true });
     window.addEventListener('keydown', unlock, { once: false });
+    document.addEventListener('visibilitychange', () => this.audio.setHidden(document.hidden));
     this.layout();
     (window as unknown as { __btk: unknown }).__btk = this.debugApi();
   }
@@ -185,7 +186,7 @@ export class Game implements GameAPI {
     }
     Object.assign(this.stage.style, { left: `${left}px`, top: `${top}px`, width: `${fw}px`, height: `${fh}px` });
     this.renderer.layout(fw, fh);
-    this.ui.setBaseSize(Math.max(12, Math.min(26, fh * 0.042)));
+    this.ui.setBaseSize(Math.max(13, Math.min(26, fh * 0.042)));
     this.touch.layout(W, H, { left, top, width: fw, height: fh });
   }
 

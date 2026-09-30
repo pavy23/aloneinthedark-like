@@ -242,7 +242,9 @@ export class UI {
     this.choiceResolve = null;
     this.choiceNav = null;
     this.msgChoices.replaceChildren();
-    this.msgEl.hidden = true;
+    // Lines queued by another script while the choice was up are shown next rather than dropped.
+    if (this.msgQueue.length > 0) this.nextLine();
+    else this.msgEl.hidden = true;
     r?.(i);
   }
 

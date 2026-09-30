@@ -232,7 +232,14 @@ export const corridor: RoomDef = {
   },
   onEnter(g) {
     if (g.hasPower() && g.flag('trig:corridor:lightsOnAmbush') && !g.flag('dead:corr1')) {
-      g.spawnCreature({ id: 'corr1', x: 7.5, z: -2.3, h: 0, hp: 3, entrance: 'none', speed: 1.2, delay: 1.0 });
+      // Still prowling: appear at whichever end of the alleyway is farthest from where we came in.
+      const spots: Array<[number, number]> = [
+        [7.5, -2.3],
+        [-6.9, 1.1],
+        [-1.0, 0.0],
+      ];
+      const [x, z] = spots.reduce((best, p) => (Math.hypot(p[0] - g.player.x, p[1] - g.player.z) > Math.hypot(best[0] - g.player.x, best[1] - g.player.z) ? p : best));
+      g.spawnCreature({ id: 'corr1', x, z, h: 0, hp: 3, entrance: 'none', speed: 1.2, delay: 1.0 });
     }
   },
 };
