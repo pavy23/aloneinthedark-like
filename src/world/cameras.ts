@@ -16,6 +16,8 @@ export interface CameraDef {
   track?: number;
   /** Higher wins when entering overlapping zones. */
   priority?: number;
+  /** Close-up over the investigator's shoulder: hide him while it is on. */
+  hidePlayer?: boolean;
 }
 
 export function inCameraZone(cam: CameraDef, x: number, z: number): boolean {

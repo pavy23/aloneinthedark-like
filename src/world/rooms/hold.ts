@@ -21,7 +21,7 @@ export const hold: RoomDef = {
   ambience: 'hold',
   surface: 'metal',
   bounds: rect(-7.5, -7.5, 7.5, 7.5),
-  spawns: { fromEngine: { x: 6.6, z: -3.5, h: -Math.PI / 2 } },
+  spawns: { fromEngine: { x: 6.6, z: -3.5, h: -Math.PI / 2 }, fromTank2: { x: 2.0, z: 6.4, h: Math.PI } },
   cameras: [
     { id: 'entry', pos: [-6.9, 4.4, 6.9], look: [3.6, 0.3, -2.8], fov: 52, zones: [rect(4.2, -7.5, 7.5, 0.6)] },
     { id: 'plank', pos: [6.9, 2.3, 2.2], look: [0.2, 0.9, -0.4], fov: 52, zones: [rect(0.4, -0.5, 5.35, 0.5)], priority: 3 },
@@ -41,7 +41,11 @@ export const hold: RoomDef = {
     b.staticRoot.add(floor);
     b.ceiling(-7.5, -7.5, 7.5, 7.5, H, M.steelDark);
     b.wall(-7.5, -7.5, 7.5, -7.5, { h: H, mat: M.steel });
-    b.wall(-7.5, 7.5, 7.5, 7.5, { h: H, mat: M.steel });
+    b.wall(-7.5, 7.5, 7.5, 7.5, { h: H, mat: M.steel, gaps: [{ at: 9.5, w: 1.0, h: 1.95 }] });
+    // Watertight door to cable tank No.2 (its manhole and ladder are just beyond).
+    const t2door = P.shipDoor(0.9, 1.9, M.steelDark, g.flag('tank2Open'));
+    b.add(t2door, 2.0, 0, 7.44, Math.PI, { dynamic: true, name: 't2Door' });
+    if (!g.flag('tank2Drained')) b.add(P.puddle(0.5), 2.0, 0.012, 6.9, 0);
     b.wall(-7.5, -7.5, -7.5, 7.5, { h: H, mat: M.steel });
     b.wall(7.5, -7.5, 7.5, 7.5, { h: H, mat: M.steel, gaps: [{ at: 4.0, w: 1.0, h: 1.95 }] });
     b.box(7.44, 1.95, -3.5, 0.2, 2.0, 1.3, M.steelDark);
@@ -163,6 +167,39 @@ export const hold: RoomDef = {
         gg.spawnCreature({ id: 'hold1', x: -4.6, z: 4.3, h: Math.PI / 2, hp: 3, entrance: 'rise', speed: 1.2 });
         gg.spawnCreature({ id: 'hold2', x: -2.6, z: -5.9, h: 0, hp: 3, entrance: 'rise', speed: 1.15, delay: 0.8 });
         gg.spawnCreature({ id: 'hold3', x: 5.6, z: 4.9, h: Math.PI, hp: 3, entrance: 'rise', speed: 1.25, delay: 2.4 });
+      },
+    });
+    b.interact({
+      id: 't2door',
+      x: 2.0,
+      z: 6.95,
+      r: 1.2,
+      label: '수밀문 (2번 탱크로)',
+      onAction: async (gg) => {
+        if (gg.flag('tank2Open')) {
+          await gg.goto('tank2', 'fromHold', 'ladder');
+          return;
+        }
+        if (!gg.flag('tank2Drained')) {
+          await gg.say(
+            '2번 케이블 탱크로 통하는 수밀문. 문틈으로 바닷물이 쉬지 않고 배어 나온다.',
+            gg.flag('act2') ? '문 너머가 물로 가득하다. 이대로 열면 이쪽 탱크까지 순식간에 잠긴다. 먼저 저쪽 물을 빼야 한다.' : '문 너머가 물로 가득한 모양이다. 손대지 않는 게 좋겠다.',
+          );
+          return;
+        }
+        if (!gg.hasItem('crank')) {
+          await gg.say('나사식 수밀문이다. 축을 돌릴 핸들이 있어야 한다.');
+          return;
+        }
+        await gg.say('문틈에서 새던 물이 멎었다. 수밀문 핸들을 축에 끼우고 돌린다.');
+        gg.sfx('valve', { volume: 1.1 });
+        const leaf = gg.room.get('t2Door')?.getObjectByName('leaf');
+        for (let i = 1; i <= 30; i++) {
+          if (leaf) leaf.rotation.y = -(i / 30) * 1.3;
+          await gg.wait(1 / 30);
+        }
+        gg.setFlag('tank2Open');
+        await gg.say('문 너머에 맨홀이 있고, 사다리가 탱크 바닥으로 내려간다. 젖은 쇠 냄새가 올라온다.');
       },
     });
     look(b, 'tank', 5.9, 1.9, '케이블 탱크', ['지름 10미터의 원형 탱크. 인양한 케이블을 사려 두는 곳이다. 거터퍼카 피복이 마르지 않도록 물을 채워 둔다.', '검은 수면 아래, 사려진 케이블이 희미하게 보인다. 그리고 그 사이로… 창백한 무언가가.'], 1.3);

@@ -4,7 +4,7 @@ import type { CollisionWorld, Rect } from './collision';
 import type { NavGrid } from './nav';
 import type { RoomBuilder } from './RoomBuilder';
 
-export type RoomId = 'deck' | 'bridge' | 'corridor' | 'cabin' | 'radio' | 'engine' | 'hold';
+export type RoomId = 'deck' | 'bridge' | 'corridor' | 'cabin' | 'radio' | 'engine' | 'hold' | 'fcsle' | 'testroom' | 'tank2';
 
 export type AmbienceId = 'deck' | 'interior' | 'engine' | 'hold' | 'bridge' | 'none';
 export type Surface = 'metal' | 'wood' | 'grate' | 'lino';
@@ -125,6 +125,10 @@ export interface CreatureSpawn {
   entrance?: 'rise' | 'none';
   speed?: number;
   delay?: number;
+  /** 'captain' is the drowned master in tank No.2 (bigger, tougher, hits harder). */
+  variant?: 'crew' | 'captain';
+  /** Hit points taken from the player per blow (default 1). */
+  strength?: number;
 }
 
 export interface ChoiceOption {
@@ -134,7 +138,10 @@ export interface ChoiceOption {
 
 /** The surface area room scripts use to drive the game. Implemented by Game. */
 export interface GameAPI {
+  /** Seconds since this page started (animation clock). */
   readonly time: number;
+  /** Play time of this game, saved with it (use for anything that must survive a save and reload). */
+  readonly playTime: number;
   flag(name: string): boolean;
   num(name: string): number;
   setFlag(name: string, v?: boolean | number): void;
@@ -148,7 +155,7 @@ export interface GameAPI {
   goto(room: RoomId, spawn: string, sfx?: 'door' | 'hatch' | 'ladder' | 'none'): Promise<void>;
   sfx(name: string, opts?: { volume?: number; x?: number; z?: number }): void;
   wait(seconds: number): Promise<void>;
-  openPanel(kind: 'safe' | 'dynamo' | 'radio'): Promise<void>;
+  openPanel(kind: 'safe' | 'dynamo' | 'radio' | 'bridge' | 'valves' | 'cableEngine'): Promise<void>;
   cutTo(cam: CameraDef | null): void;
   shake(amount: number, seconds?: number): void;
   flash(color: number, amount: number): void;
@@ -162,4 +169,6 @@ export interface GameAPI {
   hasPower(): boolean;
   refreshLights(): void;
   note(text: string): void;
+  /** Big chapter caption (like a room caption, but for acts). */
+  chapter(title: string, sub: string): void;
 }

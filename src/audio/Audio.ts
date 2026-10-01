@@ -377,6 +377,35 @@ export class AudioSystem {
           this.tone(t + i * 0.32, 75, 0.25, 'sine', 0.2 * v, 0.9, 60);
         }
         break;
+      case 'knock1':
+        // One knuckle on a steel door: Morse "dot" when knocked.
+        this.burst(t, 0.1, 'lowpass', 320, 1.2, 0.45 * v, 0.9, 0.002);
+        this.tone(t, 78, 0.22, 'sine', 0.2 * v, 0.9, 62);
+        break;
+      case 'scrape':
+        // Dragging something hard along the plating: Morse "dash" when knocked.
+        this.burst(t, 0.42, 'bandpass', 1300, 2.5, 0.16 * v, 0.8, 0.06);
+        this.burst(t, 0.42, 'lowpass', 260, 1, 0.12 * v, 0.8, 0.06);
+        break;
+      case 'chain':
+        for (let i = 0; i < 7; i++) this.burst(t + i * 0.07 + Math.random() * 0.03, 0.06, 'bandpass', 2600 + Math.random() * 1500, 6, 0.12 * v, 0.6, 0.001);
+        break;
+      case 'pump':
+        // One double stroke of the duplex steam pump.
+        this.burst(t, 0.18, 'bandpass', 700, 1.5, 0.18 * v, 0.4, 0.01);
+        this.burst(t + 0.34, 0.18, 'bandpass', 620, 1.5, 0.16 * v, 0.4, 0.01);
+        this.tone(t, 48, 0.3, 'sine', 0.12 * v, 0.3, 40);
+        break;
+      case 'galvo':
+        this.tone(t, 2400, 0.03, 'square', 0.02 * v, 0.1, 2000, 0.001);
+        break;
+      case 'cable-run':
+        // Cable tearing out of the tank, over the drum and the bow sheave.
+        this.burst(t, 3.6, 'lowpass', 500, 0.8, 0.9 * v, 0.6, 0.2);
+        this.burst(t, 3.2, 'bandpass', 1800, 1.5, 0.25 * v, 0.6, 0.3);
+        this.tone(t, 55, 3.4, 'sawtooth', 0.08 * v, 0.6, 140, 0.4);
+        this.tone(t + 0.4, 110, 3.0, 'sawtooth', 0.04 * v, 0.6, 260, 0.4);
+        break;
       case 'drip':
         this.tone(t, 1600 + Math.random() * 900, 0.12, 'sine', 0.04 * v, 0.8, 700);
         break;

@@ -11,6 +11,8 @@ import { mkdir } from 'node:fs/promises';
 const root = process.env.E2E_ROOT ?? 'dist';
 const pagePath = process.env.E2E_PAGE ?? '';
 const scheme = process.env.E2E_SCHEME === 'tank' ? 'tank' : 'direct';
+// E2E_FROM=act2 skips the first act (sets its outcome directly) and starts at the furnace with the stone.
+const fromAct2 = process.env.E2E_FROM === 'act2';
 const port = 4800 + Math.floor(Math.random() * 500);
 const server = spawn('node', ['scripts/serve.mjs', root, String(port)], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 400));
@@ -213,6 +215,36 @@ const useItem = async (name) => {
   await page.waitForTimeout(200);
 };
 
+// Fight whatever is up (faces the nearest creature, swings when in reach, drinks when low).
+const fight = async (maxMs = 30000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxMs) {
+    const st = await info();
+    const alive = st.creatures.filter((c) => c.state !== 'gone' && c.state !== 'dying');
+    if (alive.length === 0) return true;
+    if (st.hp <= 3) {
+      const heal = st.inv.find((i) => i.startsWith('brandy') || i === 'rum');
+      if (heal)
+        await page.evaluate((id) => {
+          void window.__btk.game.useItem(id);
+        }, heal);
+      await T('skip');
+    }
+    const c = alive.sort((a, b) => Math.hypot(a.x - st.x, a.z - st.z) - Math.hypot(b.x - st.x, b.z - st.z))[0];
+    const d = Math.hypot(c.x - st.x, c.z - st.z);
+    // A heavy hitter's raised arms: step back out of reach, then go in while it recovers.
+    if (c.strength > 1 && c.state === 'windup' && d < 1.7) {
+      const k = 1.3 / Math.max(d, 0.1);
+      await T('drive', st.x - (c.x - st.x) * k, st.z - (c.z - st.z) * k, 0.35, 600, false);
+      continue;
+    }
+    await T('face', c.x, c.z, 1500);
+    if (d < 1.45 && c.state !== 'rising') await T('press', 'attack');
+    else await page.waitForTimeout(80);
+    await T('skip', 5);
+  }
+  return false;
+};
 // ------------------------------------------------------------------ Title & intro
 await page.waitForTimeout(800);
 await shot('title');
@@ -229,6 +261,24 @@ log('deck start', s.x.toFixed(2), s.z.toFixed(2));
 await expect(s.room === 'deck' && Math.abs(s.x + 5.1) < 0.3, 'spawned on deck');
 await shot('deck-start');
 
+if (fromAct2) {
+  // The first act's outcome: power on, SOS sent, the stone taken; axe in hand, back in the engine room.
+  await page.evaluate(() => {
+    const b = window.__btk;
+    b.setFlags({
+      power: true, barricadeMoved: true, cabinUnlocked: true, safeOpen: true, sosSent: true, wtOpen: true,
+      'got:crowbar': true, 'got:axe': true, 'got:idol': true, 'got:brandy1': true, 'got:cabinKey': true,
+      'got:logPage': true, 'got:diary': true, 'got:engineerNotes': true, 'got:crank': true, 'got:captainLog': true,
+      engineSeen: true, holdSeen: true, axeTaken: true, engAmbush: true,
+    });
+    for (const id of ['crowbar', 'axe', 'crank', 'captainLog', 'idol', 'brandy1']) b.give(id);
+    b.game.state.push['corridor:barricade'] = [-7.35, -1.15];
+    b.game.equip('axe');
+  });
+  await page.evaluate(() => window.__btk.play('engine', -5.0, -1.2, 0));
+  await waitIdle();
+  log('skipped the first act');
+} else {
 // ------------------------------------------------------------------ Deck: crowbar, locked door, ladder
 await expect(await T('path', [[-4.3, 1.5], [-3.6, 5.0], [-2.9, 8.3]], 0.3), 'walk to crowbar');
 await T('face', -1.9, 8.3);
@@ -381,30 +431,6 @@ await page.keyboard.press('Escape');
 await page.waitForTimeout(200);
 await expect((await page.evaluate(() => window.__btk.game.state.equipped)) === 'axe', 'axe equipped');
 
-// Fight whatever came up from the engine room.
-const fight = async (maxMs = 30000) => {
-  const t0 = Date.now();
-  while (Date.now() - t0 < maxMs) {
-    const st = await info();
-    const alive = st.creatures.filter((c) => c.state !== 'gone' && c.state !== 'dying');
-    if (alive.length === 0) return true;
-    if (st.hp <= 2) {
-      const heal = st.inv.find((i) => i.startsWith('brandy'));
-      if (heal)
-        await page.evaluate((id) => {
-          void window.__btk.game.useItem(id);
-        }, heal);
-      await T('skip');
-    }
-    const c = alive.sort((a, b) => Math.hypot(a.x - st.x, a.z - st.z) - Math.hypot(b.x - st.x, b.z - st.z))[0];
-    await T('face', c.x, c.z, 1500);
-    const d = Math.hypot(c.x - st.x, c.z - st.z);
-    if (d < 1.45 && c.state !== 'rising') await T('press', 'attack');
-    else await page.waitForTimeout(80);
-    await T('skip', 5);
-  }
-  return false;
-};
 await page.waitForTimeout(1500);
 s = await info();
 if (s.creatures.length > 0) {
@@ -529,23 +555,278 @@ await T('act');
 await page.waitForFunction(() => window.__btk.info().room === 'engine' && !window.__btk.info().busy, null, { timeout: 8000 });
 log('back in engine room, hp', (await info()).hp);
 
-// ------------------------------------------------------------------ Burn it
+}
+
+// ------------------------------------------------------------------ Burn it: the second act begins
 await expect(await T('path', [[-5.0, -1.2], [-3.2, 1.3], [-3.2, 2.6]], 0.3), 'run to the furnace');
 await T('face', -3.2, 4.2);
 await T('act');
-await page.waitForFunction(() => window.__btk.info().mode === 'ending', null, { timeout: 30000 }).catch(async () => {
-  await T('skip');
-});
+for (let i = 0; i < 80 && (await info()).flags.act2 !== true; i++) await T('skip', 3);
+await waitIdle();
+s = await info();
+await expect(s.mode === 'play' && s.flags.idolBurned === true, 'burning the stone opens the second act instead of ending');
+const pellSide = s.flags['a2.pellStbd'] ? 'stbd' : 'port';
+const thingSide = s.flags['a2.thingStbd'] ? 'stbd' : 'port';
+const KO = { port: '좌현', stbd: '우현' };
+log(`ACT II: the operator is behind the ${pellSide} locker, the thing climbs the ${thingSide} cable`);
+await shot('act2');
+
+// Room-to-room legs used more than once.
+const arrive = async (room) => {
+  await page.waitForFunction((r) => window.__btk.info().room === r && !window.__btk.info().busy, room, { timeout: 10000 });
+  await waitIdle();
+};
+const clearRoom = async (what) => {
+  await page.waitForTimeout(400);
+  if ((await info()).creatures.some((c) => c.state !== 'gone')) await expect(await fight(60000), `won the fight: ${what}`);
+  await waitIdle();
+};
+const go = async (pts, fx, fz, room, what) => {
+  await expect(await T('path', pts, 0.25), what);
+  await T('face', fx, fz);
+  await T('act');
+  await arrive(room);
+};
+const engineToCorridor = (from) =>
+  go([...from, [-3.0, -5.9], [1.6, -5.9], [3.3, -5.0], [6.1, -6.3], [6.2, -6.5]], 6.3, -7.4, 'corridor', 'engine room ladder');
+const corridorToDeck = (from) => go([...from, [2.0, 0.0], [-6.0, 0.2], [-7.2, 0.0]], -8.5, 0, 'deck', 'corridor to deck door');
+const deckToCorridor = (from) => go([...from, [3.4, 3.0], [3.4, -3.0], [2.5, -9.0], [-2.0, -11.0]], -2, -12, 'corridor', 'deck to house door');
+const corridorToEngine = (from) => go([...from, [5.0, 0.0], [7.5, -1.2], [7.5, -2.1]], 7.5, -3.2, 'engine', 'corridor to engine door');
+
+// ------------------------------------------------------------------ Act II: up to the bow, down the scuttle
+await engineToCorridor([[-3.2, 1.3], [-5.0, -1.2], [-5.9, -3.2]]);
+await clearRoom('corridor');
+await corridorToDeck([[7.5, -0.4]]);
+await clearRoom('fore deck');
+s = await info();
+await expect(s.flags['a2.deckSeen'] === true, 'second-act deck narration');
+await go([[2.5, -9.0], [3.4, -3.0], [3.4, 3.0], [3.0, 5.7]], 3.0, 7.4, 'fcsle', 'down the forecastle scuttle');
+log('crew’s quarters reached');
+await shot('fcsle');
+await clearRoom('crew’s quarters');
+log('crew’s quarters clear, hp', (await info()).hp);
+
+// A bottle of rum in the lockers (healing for the fight in tank No.2).
+await expect(await T('path', [[2.0, -3.1], [-2.1, -2.85]], 0.25), 'walk to the lockers');
+await T('face', -2.1, -3.7);
+await T('act');
+await waitIdle();
+await expect((await info()).inv.includes('rum'), 'got the rum');
+
+// Knock on both chain-locker doors: one only echoes, the other answers.
+const lockerX = (side) => (side === 'port' ? -1.3 : 1.3);
+const lockerMenu = async (side, label) => {
+  // Round the mess table on the port side, then forward to the door.
+  const s0 = await info();
+  if (s0.z < 0.5) await expect(await T('path', [[-2.0, 0.5]], 0.3), 'past the mess table');
+  await expect(await T('drive', lockerX(side), 5.05, 0.2), `walk to the ${side} chain locker`);
+  await T('face', lockerX(side), 6.2);
+  await T('act');
+  for (let i = 0; i < 20 && (await page.locator('#hud .msg .choices .btn').count()) === 0; i++) await page.waitForTimeout(100);
+  await page.locator('#hud .msg .choices .btn', { hasText: label }).first().click();
+  return T('skip', 600);
+};
+const mimicSide = pellSide === 'port' ? 'stbd' : 'port';
+let heard = await lockerMenu(mimicSide, '(SOS)');
+log('knock on the', mimicSide, 'locker:', heard.slice(-1)[0]);
+await expect(heard.some((l) => l.includes('그대로다')), 'the thing echoes the knock');
+heard = await lockerMenu(pellSide, '(SOS)');
+log('knock on the', pellSide, 'locker:', heard.slice(-1)[0]);
+await expect(heard.some((l) => l.includes('내가 친 신호가 아니다')), 'the operator answers instead of echoing');
+await expect((await info()).flags[`a2.knock.${pellSide}`] === 2 && (await info()).flags[`a2.knock.${mimicSide}`] === 1, 'knocks recorded');
+heard = await lockerMenu(pellSide, '빗장');
+await waitIdle();
+s = await info();
+await expect(s.flags.pellFreed === true && s.inv.includes('testKey'), 'freed Pell, got the testing-room key');
+log('Pell freed:', heard.find((l) => l.includes('펠이오')) ? 'introduced himself' : '?');
+await shot('pell');
+
+// ------------------------------------------------------------------ Testing room: the Wheatstone bridge
+await go([[2.2, 0.5], [2.6, -1.0], [3.7, -1.6], [3.65, -3.0]], 3.6, -4.0, 'deck', 'up the ladder to the deck');
+await clearRoom('fore deck');
+await deckToCorridor([[3.4, 5.0]]);
+await clearRoom('corridor');
+await expect(await T('path', [[-6.0, 0.2], [-2.6, -0.15]], 0.2), 'walk to the testing-room door');
+await T('face', -2.6, -1.0);
+await useItem('시험실 열쇠');
+await waitIdle();
+await expect((await flag('testUnlocked')) === true, 'testing room unlocked with Pell’s key');
+await T('act');
+await arrive('testroom');
+log('testing room reached');
+await shot('testroom');
+await expect(await T('drive', -0.2, 2.3, 0.2), 'walk to the bridge');
+await T('face', -0.35, 3.1);
+await T('act');
+await T('skip');
+await page.waitForSelector('#modal .galvo-scale', { timeout: 6000 });
+
+// Set the bridge for one cable end and record a balance (the test driver knows the true resistance; it
+// still has to work the real dials, ratio arms and shunt).
+const truth = (side) =>
+  page.evaluate((side) => {
+    const g = window.__btk.game;
+    const f = g.state.flags;
+    const climbing = (f['a2.thingStbd'] ? 'stbd' : 'port') === side;
+    const nm = climbing ? Math.max(0.3, 2.1 - 0.00015 * Math.max(0, g.playTime - f['a2.t0'])) : 1037;
+    return 3.9 * nm;
+  }, side);
+const panelText = (sel) => page.locator(`#modal ${sel}`).first().innerText();
+const cycleTo = async (btnText, want) => {
+  for (let i = 0; i < 5; i++) {
+    const b = page.locator('#modal .btn', { hasText: btnText }).first();
+    if ((await b.innerText()).includes(want)) return;
+    await b.click();
+  }
+  await fail(`could not set ${btnText} to ${want}`);
+};
+const measure = async (side) => {
+  await page.locator('#modal .btn', { hasText: side === 'port' ? 'B · 좌현' : 'C · 우현' }).first().click();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const t = await truth(side);
+    const ratio = t / 0.01 <= 9999.5 ? 0.01 : t / 0.1 <= 9999.5 ? 0.1 : 1;
+    await cycleTo('비율 팔', `(×${ratio})`);
+    // Coarse balance with the heaviest shunt in, then the shunt out for the last figure.
+    await cycleTo('분류기', '1/999');
+    const want = String(Math.round(t / ratio)).padStart(4, '0').split('').map(Number);
+    for (let i = 0; i < 4; i++) {
+      const cur = Number(await page.locator('#modal .dial .val').nth(i).textContent());
+      const up = page.locator('#modal .dial').nth(i).locator('.btn').first();
+      for (let k = 0; k < (want[i] - cur + 10) % 10; k++) await up.click({ delay: 0 });
+    }
+    await cycleTo('분류기', '없음');
+    await page.locator('#modal .btn', { hasText: '측정 기록' }).first().click();
+    await page.waitForTimeout(150);
+    const out = await panelText('.log');
+    if (out.includes('균형')) return out;
+    log('  (re-balancing:', out.split('\n')[0], ')');
+  }
+  await fail(`no balance on ${side}`);
+};
+const otherSide = thingSide === 'port' ? 'stbd' : 'port';
+let rec = await measure(thingSide);
+log(`${thingSide} end:`, rec.split('\n')[0]);
+await expect(rec.includes('고장점까지') && rec.includes('해리'), 'dead earth a couple of miles out on the thing’s cable');
+rec = await measure(otherSide);
+log(`${otherSide} end:`, rec.split('\n')[0]);
+await expect(rec.includes('육지국'), 'the other end runs sound to the shore station');
+await expect((await flag('a2.measured')) !== true, 'one reading of each end is not enough');
+await shot('bridge-panel');
+log('waiting for the fault to move...');
+await page.waitForTimeout(40000);
+rec = await measure(thingSide);
+log(`${thingSide} end again:`, rec.split('\n').slice(0, 2).join(' / '));
+await expect(rec.includes('줄었다'), 'the fault has moved towards the ship');
+await expect((await flag('a2.measured')) === true, 'measurement concluded');
+await expect(rec.includes(`${KO[thingSide]} 케이블을 타고`), 'the panel names the right cable');
+await clickBtn('물러나기');
+const concl = await T('skip', 200);
+await expect(concl.some((l) => l.includes(`${KO[thingSide]} 드럼을 놓아`)), 'conclusion narrated');
+await waitIdle();
+log('bridge done; records:', (await page.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(window.__btk.info().flags).filter(([k]) => k.startsWith('a2.rec')))))));
+
+// ------------------------------------------------------------------ Engine room: pump out tank No.2
+await go([[0, 0.8]], 0, 0, 'corridor', 'out of the testing room');
+await clearRoom('corridor');
+await corridorToEngine([[-2.6, 0.1]]);
+await clearRoom('engine room');
+await expect(await T('path', [[3.3, -5.0], [1.6, -5.9], [-3.0, -5.95]], 0.25), 'walk to the valve chest');
+await T('face', -3.4, -7.0);
+await T('act');
+await T('skip');
+await page.waitForSelector('#modal .tank-level', { timeout: 6000 });
+await shot('valves');
+// As found: sea suction and tank No.2 suction open — the sea runs into the tank. Shut the sea, open
+// overboard, start the pump.
+await clickBtn('① 해수 흡입');
+await clickBtn('⑤ 선외 배출');
+await clickBtn('잡용 펌프');
+await page.waitForFunction(() => window.__btk.info().flags.tank2Drained === true, null, { timeout: 45000 });
+log('tank No.2 drained');
+await clickBtn('물러나기');
+await waitIdle();
+
+// ------------------------------------------------------------------ Tank No.2: the master, the brake key
+await go([[-5.9, -3.2]], -7, -3.5, 'hold', 'through the watertight door');
+await clearRoom('hold');
+await expect(await T('path', [[6.6, 3.5], [5.0, 5.6], [2.0, 6.35]], 0.25), 'walk round the tank to the No.2 door');
+await T('face', 2.0, 7.5);
+await T('act');
+await waitIdle();
+await expect((await flag('tank2Open')) === true, 'tank No.2 door opened');
+await T('act');
+await arrive('tank2');
+log('tank No.2 reached');
+await shot('tank2');
+await expect(await T('drive', 2.6, -0.7, 0.3), 'approach the cone');
+await page.waitForFunction(() => window.__btk.info().creatures.some((c) => c.id === 'a2captain'), null, { timeout: 5000 });
+log('the master rises');
+await shot('captain');
+await expect(await fight(90000), 'put the drowned master down');
+s = await info();
+log('master down, hp', s.hp);
+await expect(await T('drive', 1.75, -1.15, 0.2), 'walk to the cone ladder');
+await T('face', 0.45, -0.85);
+await T('act');
+for (let i = 0; i < 40 && (await page.locator('#modal .doc').count()) === 0; i++) {
+  if (await page.evaluate(() => window.__t.msgOpen())) await T('press', 'action');
+  await page.waitForTimeout(150);
+}
+await page.waitForSelector('#modal .doc', { timeout: 8000 });
+await shot('hale-letter');
+await closeDoc();
+await waitIdle();
+await expect((await info()).inv.includes('brakeKey'), 'got the brake key');
+log('brake key found');
+
+// ------------------------------------------------------------------ The fore deck: let the cable go
+await go([[4.2, 0]], 5.2, 0, 'hold', 'up the ladder');
+await go([[5.0, 5.6], [6.6, 3.5], [6.6, -2.4], [6.8, -3.4]], 7.5, -3.5, 'engine', 'back to the engine room');
+await engineToCorridor([[-5.9, -3.2]]);
+await clearRoom('corridor');
+await corridorToDeck([[7.5, -0.4]]);
+await clearRoom('fore deck');
+await expect(await T('path', [[2.5, -9.0], [3.4, -3.0], [3.4, 3.0], [1.4, 4.9], [0, 5.05]], 0.2), 'walk to the cable engine');
+await T('face', 0, 7);
+await T('act');
+await T('skip');
+await page.waitForSelector('#modal .btn:has-text("고정핀 자물쇠 열기")', { timeout: 6000 });
+await shot('cable-panel');
+await clickBtn('고정핀 자물쇠 열기');
+// The wrong order first: brake off with the drum still in gear drags the engine round.
+await clickBtn(`${KO[thingSide]} 브레이크 풀기`);
+await expect((await panelText('.log')).includes('끌려 돈다'), 'brake before clutch drags the engine');
+await clickBtn(`${KO[thingSide]} 클러치`);
+await clickBtn(`${KO[thingSide]} 브레이크 풀기`);
+await page.waitForFunction(() => window.__btk.info().flags.cableFreed === true, null, { timeout: 15000 });
+log('cable let go on the', thingSide, 'side');
+await shot('cable-gone');
+// Dawn: the SOS went out in the first act, so the Magnus's boat is coming. Fetch Pell, then down the
+// Jacob's ladder.
+for (let i = 0; i < 80 && (await info()).flags.dawn !== true; i++) await T('skip', 3);
+await waitIdle();
+await expect((await flag('dawn')) === true, 'dawn comes once the cable is free and the SOS sent');
+await go([[1.4, 4.9], [3.0, 5.7]], 3.0, 7.4, 'fcsle', 'down the scuttle for Pell');
+await expect(await T('path', [[3.65, -3.0], [3.7, -1.6], [2.6, -1.0], [2.2, 0.5], [lockerX(pellSide), 5.05]], 0.25), 'to Pell');
+await T('face', lockerX(pellSide), 6.2);
+await T('act');
+await waitIdle();
+await expect((await flag('pellCarried')) === true, 'Pell carried');
+log('Pell on my back');
+await go([[2.2, 0.5], [2.6, -1.0], [3.7, -1.6], [3.65, -3.0]], 3.6, -4.0, 'deck', 'up to the deck with Pell');
+await expect(await T('path', [[1.5, 4.6], [-1.5, 4.6], [-3.5, 3.0], [-4.8, -1.2]], 0.25), 'to the Jacob’s ladder');
+await T('face', -6.0, -1.2);
+await T('act');
 for (let i = 0; i < 60 && (await info()).mode !== 'ending'; i++) await T('skip', 3);
 await expect((await info()).mode === 'ending', 'reached the ending');
 await page.waitForTimeout(2500);
-for (let i = 0; i < 12 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
+for (let i = 0; i < 16 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
   await page.keyboard.press('Space');
   await page.waitForTimeout(300);
 }
 await shot('ending');
 const endText = await page.locator('#modal .story').innerText();
-await expect(endText.includes('끝'), 'ending text shown');
+await expect(endText.includes('엔딩 2'), 'ending 2 (Pell carried down the ladder) shown');
 log('ENDING reached. flags:', JSON.stringify((await info()).flags).slice(0, 300));
 console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');
 await browser.close();

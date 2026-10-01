@@ -129,10 +129,10 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 // ---------------------------------------------------------------- 5. review regressions
 {
   const page = await open();
-  // (a) Burn the idol first, then send SOS and walk away from the set while the reply is coming in.
+  // (a) Let the cable go first, then send SOS and walk away from the set while the reply is coming in.
   await page.evaluate(() => window.__btk.play('radio', 0.3, 1.45, 0));
   await page.evaluate(() => {
-    window.__btk.setFlags({ power: true, idolBurned: true, radioIntro: true });
+    window.__btk.setFlags({ power: true, idolBurned: true, act2: true, cableFreed: true, radioIntro: true });
     window.__btk.game.ui.clearMessages();
     void window.__btk.game.openPanel('radio');
   });
@@ -143,11 +143,25 @@ const info = (page) => page.evaluate(() => window.__btk.info());
     await page.locator('#modal .btn', { hasText: '글자 확정' }).click();
   }
   await page.keyboard.press('Escape'); // leave during "수화기에 귀를 기울인다…"
+  for (let i = 0; i < 40 && (await info(page)).flags.dawn !== true; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  check((await info(page)).flags.dawn === true, 'SOS sent last (panel closed early): dawn still comes');
+  // Down the Jacob's ladder to the Magnus's boat.
+  await page.evaluate(() => window.__btk.play('deck', -4.8, -1.2, -Math.PI / 2));
+  for (let i = 0; i < 20; i++) {
+    await page.evaluate(() => window.__btk.game.ui.clearMessages());
+    if (!(await info(page)).busy) break;
+    await page.waitForTimeout(100);
+  }
   for (let i = 0; i < 40 && (await info(page)).mode !== 'ending'; i++) {
     await page.keyboard.press('Space');
     await page.waitForTimeout(250);
   }
-  check((await info(page)).mode === 'ending', 'SOS sent last (panel closed early) still reaches the ending');
+  check((await info(page)).mode === 'ending', 'the Jacob’s ladder at dawn ends the night');
+  const ending = await page.locator('#modal .story').innerText();
+  check(ending.includes('엔딩 1'), 'without Pell it is ending 1');
 
   // (b) Drinking brandy while standing next to scenery works.
   await page.evaluate(() => window.__btk.play('bridge', 0, 0.75, 0));
@@ -197,7 +211,8 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 // ---------------------------------------------------------------- 6. every reachable spot is covered by a camera
 {
   const page = await open();
-  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold']) {
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2']) {
+    if (room === 'fcsle') await page.evaluate(() => window.__btk.setFlags({ idolBurned: true, act2: true, pellFreed: true, tank2Drained: true, tank2Open: true }));
     await page.evaluate((r) => window.__btk.play(r), room);
     await page.waitForTimeout(150);
     const res = await page.evaluate(() => {
@@ -310,7 +325,8 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   await scheme('direct', 'follow');
 
   // (c) Wherever he walks, the follow camera never ends up behind a wall, outside the room or in a doorway.
-  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold']) {
+  await page.evaluate(() => window.__btk.setFlags({ idolBurned: true, act2: true, pellFreed: true, tank2Drained: true, tank2Open: true, 'a2.captainRose': true, 'dead:a2captain': true }));
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2']) {
     await page.evaluate((r) => window.__btk.play(r), room);
     await page.waitForTimeout(150);
     const res = await page.evaluate(async () => {
@@ -388,6 +404,177 @@ const info = (page) => page.evaluate(() => window.__btk.info());
     });
     check(res.bad === 0 && res.frames > 100, `${room}: follow camera stayed inside the room for ${res.frames} frames${res.bad ? ` (outside ${res.bad}: ${JSON.stringify(res.sample)})` : ''}`);
   }
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 8. the second act's wrong turns
+{
+  const page = await open();
+  await page.evaluate(() => localStorage.clear());
+  const settle = async () => {
+    for (let i = 0; i < 60; i++) {
+      await page.evaluate(() => window.__btk.game.ui.clearMessages());
+      const s = await info(page);
+      if (!s.busy) return;
+      await page.waitForTimeout(100);
+    }
+  };
+  const act2 = { power: true, idolBurned: true, act2: true, 'a2.t0': 0, 'vc.sea': true, 'vc.tank2': true, 'vc.level': 1, fcsleSeen: true, testroomSeen: true, tank2Seen: true, 'a2.deckSeen': true, engineSeen: true };
+
+  // (a) Opening the door that only echoed lets the thing out — and no key.
+  await page.evaluate((f) => window.__btk.setFlags({ ...f, 'a2.pellStbd': true }), act2);
+  await page.evaluate(() => window.__btk.play('fcsle', -1.3, 5.05, 0));
+  await settle();
+  await page.evaluate(() => window.__btk.game.clearCreatures());
+  await page.keyboard.press('Space');
+  await page.locator('#hud .msg .choices .btn', { hasText: '빗장' }).click();
+  await page.waitForTimeout(1500);
+  let s = await info(page);
+  check(s.creatures.some((c) => c.id === 'a2mimic') && !s.inv.includes('testKey') && s.flags['a2.door.port'] === true, 'opening the echoing locker lets the thing out (no key)');
+  await page.screenshot({ path: '.shots/scen/8a-mimic.png' });
+  await settle();
+
+  // (b0) The bridge panel's keys: Shift / Tab change the ratio arms, F the shunt, Esc backs out.
+  await page.evaluate(() => window.__btk.play('testroom', -0.2, 2.3, 0));
+  await settle();
+  await page.evaluate(() => void window.__btk.game.openPanel('bridge'));
+  await page.waitForSelector('#modal .galvo-scale');
+  const btnText = (t) => page.locator('#modal .btn', { hasText: t }).first().innerText();
+  // (the game reads input on its next frame)
+  const key = async (k) => {
+    await page.keyboard.press(k);
+    await page.waitForTimeout(150);
+  };
+  const r0 = await btnText('비율 팔');
+  await key('Shift');
+  const r1 = await btnText('비율 팔');
+  await key('Tab');
+  const r2 = await btnText('비율 팔');
+  const s0 = await btnText('분류기');
+  await key('f');
+  const s1 = await btnText('분류기');
+  check(r0 !== r1 && r1 !== r2 && s0 !== s1, `bridge keys: Shift/Tab change the arms (${r0} → ${r1} → ${r2}), F the shunt (${s0} → ${s1})`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  check((await page.locator('#modal .galvo-scale').count()) === 0, 'Esc backs out of the bridge');
+  await settle();
+
+  // (b) The valve chest: as found it floods; pumping with the sea valve open gets nowhere; no discharge = dead head.
+  await page.evaluate(() => window.__btk.play('engine', -3.0, -5.95, Math.PI));
+  await settle();
+  await page.evaluate(() => {
+    window.__btk.game.clearCreatures();
+    void window.__btk.game.openPanel('valves');
+  });
+  await page.waitForSelector('#modal .tank-level');
+  const status = () => page.locator('#modal .panel .log').innerText();
+  check((await status()).includes('흘러든다'), 'as found: the sea runs into tank No.2');
+  await page.locator('#modal .btn', { hasText: '잡용 펌프' }).click();
+  await page.waitForTimeout(400);
+  check((await status()).includes('헐떡'), 'pump with no discharge open: dead head');
+  await page.locator('#modal .btn', { hasText: '⑤ 선외 배출' }).click();
+  const lv0 = (await info(page)).flags['vc.level'];
+  await page.waitForTimeout(3000);
+  const lv1 = (await info(page)).flags['vc.level'];
+  check((await status()).includes('바다를 퍼 올리고') && lv1 >= lv0 - 0.001, `sea valve still open: the level does not drop (${lv0.toFixed(3)} -> ${lv1.toFixed(3)})`);
+  await page.locator('#modal .btn', { hasText: '① 해수 흡입' }).click();
+  await page.waitForTimeout(3000);
+  const lv2 = (await info(page)).flags['vc.level'];
+  check(lv2 < lv1 - 0.1, `sea valve shut: tank No.2 drains (${lv1.toFixed(3)} -> ${lv2.toFixed(3)})`);
+  await page.locator('#modal .btn', { hasText: '물러나기' }).click();
+
+  // (c) The cable engine: not without knowing which cable; then the wrong drum costs dear.
+  await page.evaluate(() => {
+    window.__btk.give('brakeKey');
+    window.__btk.setFlags({ 'a2.thingStbd': true, 'a2.finale': true, sosSent: true });
+  });
+  await page.evaluate(() => window.__btk.play('deck', 0, 5.05, 0));
+  await settle();
+  await page.evaluate(() => {
+    window.__btk.game.clearCreatures();
+    void window.__btk.game.openPanel('cableEngine');
+  });
+  const btn = (t) => page.locator('#modal .btn', { hasText: t }).first().click();
+  const log = () => page.locator('#modal .panel .log').innerText();
+  await btn('고정핀 자물쇠 열기');
+  await btn('좌현 클러치');
+  await btn('좌현 브레이크 풀기');
+  check((await log()).includes('모른다') && !(await info(page)).flags['ce.portGone'], 'no cable is let go before the measurement');
+  await page.evaluate(() => window.__btk.setFlags({ 'a2.measured': true }));
+  await btn('좌현 브레이크 풀기');
+  await page.waitForFunction(() => window.__btk.info().flags['ce.portGone'] === true, null, { timeout: 5000 });
+  await page.waitForTimeout(3600);
+  await settle();
+  s = await info(page);
+  check(!s.flags.cableFreed && s.mode === 'play', 'the wrong drum runs out but the ship is still held');
+  check(s.creatures.some((c) => c.id === 'a2bow4'), 'and more of them come over the bow');
+  await page.evaluate(() => {
+    window.__btk.game.clearCreatures();
+    void window.__btk.game.openPanel('cableEngine');
+  });
+  await btn('우현 클러치');
+  await btn('우현 브레이크 풀기');
+  await page.waitForFunction(() => window.__btk.info().flags.cableFreed === true, null, { timeout: 8000 });
+  for (let i = 0; i < 40 && (await info(page)).flags.dawn !== true; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  s = await info(page);
+  check(s.flags.dawn === true && s.mode === 'play', 'the right drum then frees the ship (SOS already sent: dawn)');
+  // (d) Leaving without the operator is a choice you are asked to make.
+  await page.evaluate(() => window.__btk.setFlags({ pellFreed: true }));
+  await page.evaluate(() => window.__btk.play('deck', -4.8, -1.2, -Math.PI / 2));
+  await settle();
+  await page.keyboard.press('Space');
+  await page.locator('#hud .msg .choices .btn', { hasText: '그만둔다' }).click();
+  await page.waitForTimeout(400);
+  check((await info(page)).mode === 'play', 'can still go back for Pell');
+  await settle();
+  await page.keyboard.press('Space');
+  await page.locator('#hud .msg .choices .btn', { hasText: '두고 내려간다' }).click();
+  for (let i = 0; i < 40 && (await info(page)).mode !== 'ending'; i++) await page.waitForTimeout(200);
+  for (let i = 0; i < 20 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(300);
+  }
+  check((await page.locator('#modal .story').innerText()).includes('엔딩 1'), 'leaving him behind is ending 1');
+  await page.close();
+}
+{
+  // (e) The thing's climb runs on play time, so a save and reload does not reset it; (f) a save from
+  // before the second act existed opens it.
+  const page = await open();
+  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => window.__btk.play('testroom', 0, 1.0, 0));
+  await page.evaluate(() => {
+    const g = window.__btk.game;
+    window.__btk.setFlags({ power: true, idolBurned: true, act2: true, testroomSeen: true });
+    g.state.time = 5000;
+    window.__btk.setFlags({ 'a2.t0': 4000 });
+    g.save(false);
+  });
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(600);
+  await page.locator('#modal .title .btn', { hasText: '이어하기' }).click();
+  await page.waitForTimeout(1500);
+  const nm = await page.evaluate(() => {
+    const g = window.__btk.game;
+    return 2.1 - 0.00015 * (g.playTime - g.state.flags['a2.t0']);
+  });
+  check(nm < 1.96 && nm > 1.9, `after reload the fault is still ~1.95 nm below the bow (${nm.toFixed(3)})`);
+  await page.evaluate(() => {
+    const g = window.__btk.game;
+    for (const k of Object.keys(g.state.flags)) if (k === 'act2' || k.startsWith('a2.') || k.startsWith('vc.')) delete g.state.flags[k];
+    g.save(false);
+  });
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(600);
+  await page.locator('#modal .title .btn', { hasText: '이어하기' }).click();
+  await page.waitForTimeout(1500);
+  const f = (await info(page)).flags;
+  check(f.act2 === true && f['vc.sea'] === true && typeof f['a2.t0'] === 'number', 'an old save with the stone burned opens the second act');
   await page.close();
 }
 

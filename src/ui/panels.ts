@@ -2,6 +2,7 @@ import type { Game } from '../game/Game';
 import { checkSafe, classifyPress, decodeLetter, dynamoAction, endsWithSOS, encodeText, isDistressWavelength, RATED_MIN, type DynamoAction } from '../game/logic';
 import { DYN_TEXT, emitDynamo, getDyn, onDynamo, setDyn } from '../game/dynamo';
 import { FocusNav, type Modal } from './UI';
+import { dawnComes, readyForEnding } from '../game/act2';
 import { button, h } from './dom';
 
 // ------------------------------------------------------------------ Safe
@@ -343,9 +344,9 @@ export function openRadioPanel(g: Game): Promise<void> {
       g.note('마그누스호에 조난 신호가 전달되었다');
       // The wireless room script checks for the ending when the panel closes; if the player already
       // walked away from the set while the reply was coming in, finish from here.
-      if (closed && g.flag('idolBurned')) {
-        await g.say('수화기 너머로 마그누스호의 응답이 들려왔다. 이제 할 일은 끝났다.');
-        await g.ending();
+      if (closed && readyForEnding(g)) {
+        await g.say('수화기 너머로 마그누스호의 응답이 들려왔다.');
+        await dawnComes(g);
       }
     };
     const key = h('button', { class: 'btn morse-key', type: 'button', text: '전건 (누르고 있기)' }) as HTMLButtonElement;

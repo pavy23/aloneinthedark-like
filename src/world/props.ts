@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { M, type Mat } from '../render/materials';
 import { cyl, mesh, part, partC, quad, ring, rod } from '../render/geo';
+import { HumanRig } from '../entities/Rig';
 
 // Prop library. Every builder returns a Group whose origin is the centre of its footprint on the floor,
 // with its "front" facing +Z. Rooms rotate/position them and add colliders by footprint.
@@ -300,6 +301,13 @@ export function cableEngine(): THREE.Group {
   drum.name = 'drum';
   cyl(g, M.iron, -0.85, 1.1, 0.2, 0.9, 0.08, 'x', 16);
   cyl(g, M.iron, 0.85, 1.1, 0.2, 0.9, 0.08, 'x', 16);
+  // Centre flange: a double gear, one drum to port and one to starboard.
+  cyl(g, M.iron, 0, 1.1, 0.2, 0.9, 0.08, 'x', 16);
+  // Band brakes and their levers, one per drum.
+  for (const x of [-0.45, 0.45]) {
+    ring(g, M.steelDark, x, 1.1, 0.2, 0.8, 0.04, 16).rotation.y = Math.PI / 2;
+    rod(g, M.redPaint, V(x, 0.3, 1.0), V(x, 1.3, 1.25), 0.035, 5);
+  }
   // Frames
   part(g, M.steelDark, -1.1, 0.3, 0.2, 0.2, 1.3, 1.2);
   part(g, M.steelDark, 1.1, 0.3, 0.2, 0.2, 1.3, 1.2);
@@ -957,5 +965,303 @@ export function axeItem(): THREE.Group {
   partC(g, M.redPaint, 0.36, 0.08, 0, 0.12, 0.18, 0.03);
   partC(g, M.ironLight, 0.36, 0.2, 0, 0.14, 0.05, 0.032);
   partC(g, M.redPaint, 0.36, -0.07, 0, 0.06, 0.1, 0.03);
+  return g;
+}
+
+// ---------------------------------------------------------------- Act 2: forecastle, testing room, valve chest
+
+/**
+ * Forecastle scuttle: the small steel hood over the companion ladder down to the crew's quarters. The
+ * doorway faces +Z. `broken`: the door has been torn off and lies on the deck beside it.
+ */
+export function scuttle(broken = false): THREE.Group {
+  const g = new THREE.Group();
+  const w = 1.2;
+  const h = 1.55;
+  const d = 1.3;
+  part(g, M.paint, -w / 2 + 0.04, 0, 0, 0.08, h, d);
+  part(g, M.paint, w / 2 - 0.04, 0, 0, 0.08, h, d);
+  part(g, M.paint, 0, 0, -d / 2 + 0.04, w, h, 0.08);
+  part(g, M.steelDark, 0, h, 0, w + 0.12, 0.07, d + 0.12);
+  part(g, M.steelDark, 0, h - 0.18, d / 2 - 0.04, w, 0.18, 0.08); // lintel
+  part(g, M.steelDark, 0, 0, d / 2 - 0.04, w, 0.25, 0.08); // sill
+  quad(g, M.void, 0, 0.82, d / 2 - 0.12, w - 0.16, 1.15);
+  const leaf = new THREE.Group();
+  leaf.name = 'scuttleDoor';
+  part(leaf, M.steelDark, 0, 0, 0, w - 0.2, 1.18, 0.05);
+  part(leaf, M.ironLight, (w - 0.2) / 2 - 0.12, 0.6, 0.04, 0.12, 0.04, 0.04);
+  if (broken) {
+    leaf.rotation.set(-Math.PI / 2, 0, 0.35);
+    leaf.position.set(0.95, 0.03, 0.9);
+    // A hinge strap still on the frame, wrenched out.
+    part(g, M.ironLight, -w / 2 + 0.1, 0.9, d / 2, 0.16, 0.05, 0.04, 0, 0, 0.7);
+  } else {
+    leaf.position.set(0, 0.25, d / 2);
+  }
+  g.add(leaf);
+  return g;
+}
+
+/** Anchor chain coming down from the deck pipe into the locker below, as a hanging column of links. */
+export function chainColumn(h: number): THREE.Group {
+  const g = new THREE.Group();
+  cyl(g, M.iron, 0, h - 0.1, 0, 0.17, 0.2, 'y', 10);
+  let i = 0;
+  for (let y = h - 0.25; y > 0.05; y -= 0.105) {
+    const link = ring(g, M.ironLight, 0, y, 0, 0.065, 0.018, 6);
+    link.scale.set(0.75, 1, 1);
+    link.rotation.y = i++ % 2 ? Math.PI / 2 : 0;
+  }
+  return g;
+}
+
+/** Heap of anchor chain on a locker floor. */
+export function chainHeap(r = 0.7): THREE.Group {
+  const g = new THREE.Group();
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 46; k++) {
+    const a = rnd() * Math.PI * 2;
+    const rr = Math.sqrt(rnd()) * r;
+    const y = 0.04 + rnd() * 0.25 * (1 - rr / r);
+    const link = ring(g, M.ironLight, Math.cos(a) * rr, y, Math.sin(a) * rr, 0.065, 0.018, 6);
+    link.scale.set(0.75, 1, 1);
+    link.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+  }
+  return g;
+}
+
+/** Cast-iron bogie stove of the crew's quarters, its flue going up through the deckhead. */
+export function bogieStove(ceiling = 2.3): THREE.Group {
+  const g = new THREE.Group();
+  part(g, M.iron, 0, 0, 0, 0.5, 0.08, 0.5);
+  cyl(g, M.iron, 0, 0.42, 0, 0.22, 0.68, 'y', 10);
+  cyl(g, M.ironLight, 0, 0.8, 0, 0.25, 0.06, 'y', 10);
+  quad(g, M.ember, 0, 0.32, 0.225, 0.14, 0.1);
+  rod(g, M.iron, V(0, 0.83, 0), V(0, ceiling, 0), 0.06, 6);
+  return g;
+}
+
+/** Wooden bench for the mess table. */
+export function bench(len = 1.6): THREE.Group {
+  const g = new THREE.Group();
+  part(g, M.woodDark, 0, 0.4, 0, len, 0.05, 0.3);
+  part(g, M.woodDark, -len / 2 + 0.1, 0, 0, 0.05, 0.4, 0.26);
+  part(g, M.woodDark, len / 2 - 0.1, 0, 0, 0.05, 0.4, 0.26);
+  return g;
+}
+
+/** Yellow oilskins hung on a hook. */
+export function oilskins(): THREE.Group {
+  const g = new THREE.Group();
+  part(g, M.brass, 0, 1.75, 0, 0.05, 0.05, 0.1);
+  const coat = new THREE.Group();
+  part(coat, M.lanternGlass, 0, 0.7, 0.06, 0.48, 1.05, 0.12);
+  part(coat, M.lanternGlass, 0, 1.58, 0.06, 0.3, 0.2, 0.1);
+  g.add(coat);
+  return g;
+}
+
+/**
+ * The surviving wireless operator, sitting against the chain-locker bulkhead with a blanket over his
+ * shoulders and his broken leg out straight in a splint. Faces +Z.
+ */
+export function survivor(): THREE.Group {
+  const g = new THREE.Group();
+  const rig = new HumanRig({
+    colors: {
+      coat: 0x2b2f3a,
+      coatDark: 0x181b22,
+      trousers: 0x3a3428,
+      shoes: 0x1a140e,
+      skin: 0xc4a88c,
+      shirt: 0x8a8678,
+      hair: 0x3a2818,
+      eyes: 0x1a1612,
+    },
+    bulk: 0.95,
+    torso: 0.55,
+  });
+  rig.setPose({
+    spine: [-0.18, 0, 0.05],
+    neck: [0.45, 0.25, 0],
+    thighL: [-1.45, 0, 0.12],
+    kneeL: [1.35, 0, 0],
+    thighR: [-1.5, 0, -0.05],
+    kneeR: [0.05, 0, 0],
+    shoulderL: [-0.55, 0, 0.45],
+    elbowL: [-1.4, 0, 0],
+    shoulderR: [-0.5, 0, -0.45],
+    elbowR: [-1.35, 0, 0],
+  });
+  rig.root.position.y = -0.82;
+  g.add(rig.root);
+  // Blanket round the shoulders, splint on the right leg.
+  part(g, M.blanket, 0, 0.42, -0.05, 0.62, 0.55, 0.32, -0.15);
+  part(g, M.woodLight, -0.12, 0.08, 0.45, 0.04, 0.04, 0.75, 0, 0.02);
+  part(g, M.woodLight, -0.24, 0.08, 0.45, 0.04, 0.04, 0.75, 0, 0.02);
+  return g;
+}
+
+/** Wheatstone bridge in its mahogany case: ratio plugs and four decade dials (named dial0..dial3). */
+export function bridgeBox(): THREE.Group {
+  const g = new THREE.Group();
+  part(g, M.woodDark, 0, 0, 0, 0.62, 0.13, 0.36);
+  part(g, M.black, 0, 0.13, 0, 0.58, 0.005, 0.32);
+  for (let i = 0; i < 4; i++) {
+    const knob = new THREE.Group();
+    knob.name = `dial${i}`;
+    cyl(knob, M.brass, 0, 0, 0, 0.045, 0.04, 'y', 10);
+    part(knob, M.black, 0, 0.02, 0.02, 0.008, 0.005, 0.04);
+    knob.position.set(-0.21 + i * 0.14, 0.16, 0.06);
+    g.add(knob);
+  }
+  for (let i = 0; i < 6; i++) cyl(g, M.brass, -0.2 + i * 0.08, 0.15, -0.09, 0.014, 0.05, 'y', 6);
+  for (const x of [-0.27, 0.27]) cyl(g, M.brass, x, 0.17, -0.14, 0.018, 0.06, 'y', 6);
+  return g;
+}
+
+/**
+ * Thomson's mirror galvanometer with its lamp and scale. The light spot (named 'spot') moves along the
+ * scale; a room script positions it.
+ */
+export function galvanometer(): THREE.Group {
+  const g = new THREE.Group();
+  // Instrument on a levelling base
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    rod(g, M.brass, V(0, 0.14, -0.35), V(Math.cos(a) * 0.1, 0, -0.35 + Math.sin(a) * 0.1), 0.008, 4);
+  }
+  cyl(g, M.brass, 0, 0.24, -0.35, 0.075, 0.2, 'y', 12);
+  cyl(g, M.black, 0, 0.24, -0.27, 0.03, 0.02, 'z', 8);
+  // Lamp and scale on a stand in front of it
+  part(g, M.woodDark, 0, 0, 0.12, 0.08, 0.32, 0.08);
+  part(g, M.woodDark, 0, 0.32, 0.12, 0.72, 0.12, 0.03);
+  quad(g, M.paperBlank, 0, 0.38, 0.137, 0.68, 0.08);
+  for (let i = -6; i <= 6; i++) part(g, M.black, i * 0.05, i % 2 ? 0.35 : 0.34, 0.139, 0.004, i % 2 ? 0.02 : 0.035, 0.002);
+  cyl(g, M.iron, 0, 0.2, 0.13, 0.04, 0.12, 'z', 8);
+  const spot = mesh(new THREE.CircleGeometry(0.018, 8), M.bulbOn);
+  spot.name = 'spot';
+  spot.position.set(0, 0.38, 0.14);
+  g.add(spot);
+  return g;
+}
+
+/** Box of Leclanché cells for the testing battery. */
+export function batteryBox(): THREE.Group {
+  const g = new THREE.Group();
+  part(g, M.woodLight, 0, 0, 0, 0.5, 0.18, 0.3);
+  for (let i = 0; i < 6; i++) {
+    const x = -0.17 + (i % 3) * 0.17;
+    const z = i < 3 ? -0.07 : 0.07;
+    cyl(g, M.porthole, x, 0.25, z, 0.05, 0.14, 'y', 8);
+    cyl(g, M.black, x, 0.33, z, 0.02, 0.04, 'y', 6);
+  }
+  return g;
+}
+
+/** Wall terminal board where the cable ends are brought in for testing; facing +Z, origin at its foot. */
+export function terminalBoard(): THREE.Group {
+  const g = new THREE.Group();
+  part(g, M.woodDark, 0, 1.0, 0, 0.9, 0.6, 0.04);
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) cyl(g, M.brass, -0.3 + c * 0.2, 1.42 - r * 0.22, 0.04, 0.025, 0.05, 'z', 6);
+  // Two cable leads coming up from the floor
+  for (const x of [-0.3, 0.1]) {
+    rod(g, M.cable, V(x, 0, 0.08), V(x, 1.18, 0.05), 0.025, 5);
+  }
+  part(g, M.ceramic, -0.38, 1.5, 0.03, 0.16, 0.06, 0.01);
+  part(g, M.ceramic, 0.02, 1.5, 0.03, 0.16, 0.06, 0.01);
+  return g;
+}
+
+/**
+ * Bilge and ballast valve chest: a manifold along X with `n` hand-wheels on top (named vcWheel0..), and
+ * the general-service pump beside it. Origin at the floor centre, front +Z.
+ */
+export function valveChest(n = 6): THREE.Group {
+  const g = new THREE.Group();
+  const len = 0.36 * n + 0.2;
+  part(g, M.iron, 0, 0.55, 0, len, 0.28, 0.32);
+  for (const x of [-len / 2 + 0.12, len / 2 - 0.12]) part(g, M.iron, x, 0, 0, 0.12, 0.55, 0.26);
+  for (let i = 0; i < n; i++) {
+    const x = -len / 2 + 0.28 + i * 0.36;
+    rod(g, M.ironLight, V(x, 0.83, 0), V(x, 1.05, 0), 0.025, 5);
+    const w = valveWheel(0.11, `vcWheel${i}`);
+    w.rotation.x = -Math.PI / 2;
+    w.position.set(x, 1.06, 0);
+    g.add(w);
+    part(g, M.brass, x, 0.62, 0.17, 0.22, 0.07, 0.01);
+    rod(g, M.iron, V(x, 0.55, 0), V(x, 0, 0), 0.05, 6);
+  }
+  return g;
+}
+
+/** Duplex direct-acting steam pump (the general-service pump). */
+export function gsPump(): THREE.Group {
+  const g = new THREE.Group();
+  part(g, M.iron, 0, 0, 0, 0.7, 0.12, 0.5);
+  cyl(g, M.iron, -0.15, 0.4, 0, 0.14, 0.55, 'y', 10);
+  cyl(g, M.iron, 0.15, 0.4, 0, 0.14, 0.55, 'y', 10);
+  cyl(g, M.steelGreen, -0.15, 1.05, 0, 0.12, 0.6, 'y', 10);
+  cyl(g, M.steelGreen, 0.15, 1.05, 0, 0.12, 0.6, 'y', 10);
+  const rods = new THREE.Group();
+  rods.name = 'pumpRods';
+  rod(rods, M.ironLight, V(-0.15, 0.68, 0), V(-0.15, 0.76, 0), 0.02, 4);
+  rod(rods, M.ironLight, V(0.15, 0.68, 0), V(0.15, 0.76, 0), 0.02, 4);
+  g.add(rods);
+  return g;
+}
+
+/** Heavy key for the padlocked brake pin of the cable engine. */
+export function bigKeyItem(): THREE.Group {
+  const g = keyItem();
+  g.scale.setScalar(1.6);
+  return g;
+}
+
+/** A thin instrument wire between two points (added to `parent`). */
+export function wire(parent: THREE.Object3D, a: readonly [number, number, number], b: readonly [number, number, number]): void {
+  rod(parent, M.black, V(a[0], a[1], a[2]), V(b[0], b[1], b[2]), 0.006, 3);
+}
+
+/** The drowned master, slumped against the cone of tank No.2 with his cap beside him. Faces +Z. */
+export function drownedMaster(): THREE.Group {
+  const g = new THREE.Group();
+  const rig = new HumanRig({
+    colors: {
+      coat: 0x18203a,
+      coatDark: 0x0c1020,
+      trousers: 0x161b2c,
+      shoes: 0x0c0c0a,
+      skin: 0x8c9a86,
+      shirt: 0xb8b8a8,
+      hair: 0x9a9a92,
+      accent: 0xb89a48,
+      eyes: 0x404838,
+    },
+    scale: 1.07,
+    bulk: 1.26,
+    torso: 0.62,
+    coatSkirt: true,
+    seaweed: true,
+  });
+  rig.setPose({
+    spine: [-0.1, 0, 0.12],
+    neck: [0.95, 0.2, 0.15],
+    thighL: [-1.4, 0, 0.2],
+    kneeL: [1.1, 0, 0],
+    thighR: [-1.5, 0, -0.15],
+    kneeR: [0.4, 0, 0],
+    shoulderL: [0.15, 0, 0.25],
+    elbowL: [-0.2, 0, 0],
+    shoulderR: [0.1, 0, -0.3],
+    elbowR: [-0.3, 0, 0],
+  });
+  rig.root.position.y = -0.86;
+  g.add(rig.root);
+  // His cap on the tank floor.
+  cyl(g, M.black, 0.55, 0.03, 0.35, 0.16, 0.03, 'y', 10);
+  cyl(g, M.black, 0.55, 0.09, 0.35, 0.13, 0.09, 'y', 10);
+  cyl(g, M.brass, 0.55, 0.08, 0.35, 0.135, 0.025, 'y', 10);
   return g;
 }

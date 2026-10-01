@@ -19,10 +19,12 @@ import type { ChoiceOption, CreatureSpawn, GameAPI, Interactable, RoomId } from 
 import { openInventory } from '../ui/Inventory';
 import { openDoc } from '../ui/DocReader';
 import { openSafePanel, openDynamoPanel, openRadioPanel } from '../ui/panels';
+import { openBridgePanel, openCablePanel, openValvePanel } from '../ui/panels2';
 import * as Screens from '../ui/screens';
 import { TouchControls } from '../ui/Touch';
 import { FollowCam } from './FollowCam';
 import { basisFromView, MoveLatch } from './controls';
+import { beginAct2Flags } from './act2';
 
 type Mode = 'boot' | 'title' | 'play' | 'ending';
 
@@ -291,6 +293,8 @@ export class Game implements GameAPI {
     this.clearCreatures();
     this.resetTransient();
     this.state = s;
+    // Saves from before the second act existed: burning the stone now opens it.
+    if (s.flags.idolBurned && !s.flags.act2) beginAct2Flags(this);
     this.mode = 'play';
     this.pl.object.visible = true;
     this.pl.setWeapon(s.equipped, s.equipped ? (ITEMS[s.equipped]?.weapon ?? null) : null);
@@ -491,6 +495,8 @@ export class Game implements GameAPI {
       }
       const moving = this.pl.state === 'walk' || this.pl.state === 'run';
       this.follow.update(this.camera, dt, this.pl.x, this.pl.z, this.pl.heading, moving);
+      const roll = this.trimRoll();
+      if (roll) this.camera.rotateZ(roll);
       if (this.shakeAmt > 0) {
         this.camera.position.x += (noise1(this.realTime * 40, 7) - 0.5) * this.shakeAmt;
         this.camera.position.y += (noise1(this.realTime * 40, 9) - 0.5) * this.shakeAmt;
@@ -499,7 +505,7 @@ export class Game implements GameAPI {
       this.pl.object.visible = this.mode !== 'title' && this.follow.reach > 0.55;
       return;
     }
-    if (this.mode === 'play') this.pl.object.visible = true;
+    if (this.mode === 'play') this.pl.object.visible = !this.camOverride?.hidePlayer;
     let c: CameraDef;
     if (this.camOverride) {
       c = this.camOverride;
@@ -531,6 +537,8 @@ export class Game implements GameAPI {
       this.lookTarget.z = damp(this.lookTarget.z, tz, 4, dt);
     }
     this.camera.lookAt(this.lookTarget);
+    const roll = this.trimRoll();
+    if (roll) this.camera.rotateZ(roll);
   }
 
   /** Screen-relative movement: turn the pushed direction into a world direction for the investigator. */
@@ -737,7 +745,7 @@ export class Game implements GameAPI {
         this.state.hp = Math.min(MAX_HP, this.state.hp + 3);
         this.takeItem(id);
         this.audio.sfx('pickup', { volume: 0.6 });
-        await this.say('브랜디를 한 모금 들이켰다. 목구멍이 타들어 가고, 떨리던 손이 조금 진정된다.');
+        await this.say(item.useText ?? '브랜디를 한 모금 들이켰다. 목구멍이 타들어 가고, 떨리던 손이 조금 진정된다.');
         return;
       }
       if (item.kind === 'weapon') {
@@ -790,7 +798,7 @@ export class Game implements GameAPI {
     const d = Math.hypot(c.x - this.pl.x, c.z - this.pl.z);
     const a = Math.abs(angleDiff(c.heading, Math.atan2(this.pl.x - c.x, this.pl.z - c.z)));
     if (d > 1.3 || a > 1.1) return;
-    this.state.hp -= 1;
+    this.state.hp -= c.strength;
     this.pl.hurt(c.x, c.z);
     this.audio.sfx('hurt');
     this.flash(0x8a0000, 0.55);
@@ -845,6 +853,10 @@ export class Game implements GameAPI {
 
   get time(): number {
     return this.gameTime;
+  }
+
+  get playTime(): number {
+    return this.state.time;
   }
 
   get room(): RoomInstance {
@@ -942,9 +954,16 @@ export class Game implements GameAPI {
     return this.guard(new Promise((resolve) => this.waits.push({ t: seconds, resolve })));
   }
 
-  async openPanel(kind: 'safe' | 'dynamo' | 'radio'): Promise<void> {
-    const p = kind === 'safe' ? openSafePanel(this) : kind === 'dynamo' ? openDynamoPanel(this) : openRadioPanel(this);
-    await this.guard(p);
+  async openPanel(kind: 'safe' | 'dynamo' | 'radio' | 'bridge' | 'valves' | 'cableEngine'): Promise<void> {
+    const open = {
+      safe: openSafePanel,
+      dynamo: openDynamoPanel,
+      radio: openRadioPanel,
+      bridge: openBridgePanel,
+      valves: openValvePanel,
+      cableEngine: openCablePanel,
+    }[kind];
+    await this.guard(open(this));
   }
 
   cutTo(cam: CameraDef | null): void {
@@ -965,18 +984,21 @@ export class Game implements GameAPI {
   }
 
   spawnCreature(s: CreatureSpawn): void {
-    if (this.flag(`dead:${s.id}`) || this.flag('idolBurned')) return;
+    // Burning the stone stills the first act's dead for good; the second act's ("a2…") come for the rest,
+    // until the cable is let go and the sea takes them all back.
+    if (this.flag(`dead:${s.id}`) || this.flag('cableFreed') || (this.flag('idolBurned') && !s.id.startsWith('a2'))) return;
     if (this.creatures.some((c) => c.id === s.id && c.state !== 'gone')) return;
-    const c = new Creature(s.id, s.x, s.z, s.h ?? 0, s.hp ?? 3, s.entrance ?? 'none', s.speed ?? 1.15, s.delay ?? 0, {
-      onStrike: (cr) => this.creatureStrike(cr),
-      onGrowl: (cr) => this.sfx('growl', { x: cr.x, z: cr.z }),
-      onStep: (cr) => this.sfx('creature-step', { x: cr.x, z: cr.z, volume: 0.8 }),
-      onDead: (cr) => {
+    const events = {
+      onStrike: (cr: Creature) => this.creatureStrike(cr),
+      onGrowl: (cr: Creature) => this.sfx('growl', { x: cr.x, z: cr.z }),
+      onStep: (cr: Creature) => this.sfx('creature-step', { x: cr.x, z: cr.z, volume: 0.8 }),
+      onDead: (cr: Creature) => {
         this.setFlag(`dead:${cr.id}`);
         cr.object.removeFromParent();
         disposeTree(cr.object);
       },
-    });
+    };
+    const c = new Creature(s.id, s.x, s.z, s.h ?? 0, s.hp ?? 3, s.entrance ?? 'none', s.speed ?? 1.15, s.delay ?? 0, events, s.variant ?? 'crew', s.strength ?? 1);
     this.creatures.push(c);
     this.scene.add(c.object);
     if (s.entrance === 'rise') this.sfx('splash', { x: s.x, z: s.z });
@@ -1018,6 +1040,16 @@ export class Game implements GameAPI {
 
   note(text: string): void {
     this.ui.note(text);
+  }
+
+  chapter(title: string, sub: string): void {
+    this.ui.caption(title, sub);
+  }
+
+  /** Act 2: the bow is being dragged down — the whole view sits slightly askew and heaves. */
+  private trimRoll(): number {
+    if (!this.flag('act2') || this.flag('cableFreed') || this.mode !== 'play') return 0;
+    return 0.026 + Math.sin(this.realTime * 0.45) * 0.008 + Math.sin(this.realTime * 1.7) * 0.002;
   }
 
   /** Run a script with player control locked. */
@@ -1094,7 +1126,7 @@ export class Game implements GameAPI {
         hp: this.state.hp,
         busy: this.busy,
         ui: this.ui.anyOpen,
-        creatures: this.creatures.map((c) => ({ id: c.id, state: c.state, x: c.x, z: c.z, hp: c.hp })),
+        creatures: this.creatures.map((c) => ({ id: c.id, state: c.state, x: c.x, z: c.z, hp: c.hp, strength: c.strength })),
         hint: this.findInteractable()?.id ?? null,
         inv: [...this.state.inv],
         flags: { ...this.state.flags },
@@ -1119,5 +1151,11 @@ function captionSub(id: RoomId): string {
       return 'ENGINE ROOM';
     case 'hold':
       return 'CABLE TANK No.1';
+    case 'fcsle':
+      return 'CREW’S QUARTERS';
+    case 'testroom':
+      return 'TESTING ROOM';
+    case 'tank2':
+      return 'CABLE TANK No.2';
   }
 }

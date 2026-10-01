@@ -5,6 +5,7 @@ import { M } from '../../render/materials';
 import { part, quad } from '../../render/geo';
 import * as P from '../props';
 import { exit, look, pickup, rect } from './common';
+import { dawnComes, readyForEnding } from '../../game/act2';
 
 const RADIO_CAM: CameraDef = { id: 'radioClose', pos: [0.3, 1.55, 1.75], look: [0.35, 1.25, 3.35], fov: 50, zones: [] };
 
@@ -84,10 +85,7 @@ export const radio: RoomDef = {
         gg.cutTo(RADIO_CAM);
         await gg.openPanel('radio');
         gg.cutTo(null);
-        if (gg.flag('sosSent') && gg.flag('idolBurned')) {
-          await gg.say('이제 할 일은 끝났다. 기관실 불 곁으로 돌아가 새벽을 기다리자.');
-          await gg.ending();
-        }
+        if (readyForEnding(gg)) await dawnComes(gg);
       },
     });
     b.interact({

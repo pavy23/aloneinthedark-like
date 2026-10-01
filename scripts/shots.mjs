@@ -29,7 +29,12 @@ const setCamera = (camera) =>
     const g = window.__btk.game;
     g.applySettings({ ...g.settings, camera });
   }, camera);
-const rooms = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold'].filter((r) => !filter || r === filter);
+const rooms = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2'].filter((r) => !filter || r === filter);
+// ACT=2 shows every room as it is in the second act (power on, the stone burned, tank No.2 drained).
+if (process.env.ACT === '2')
+  await page.evaluate(() =>
+    window.__btk.setFlags({ power: true, idolBurned: true, act2: true, 'a2.t0': 0, tank2Drained: true, tank2Open: true, 'vc.level': 0 }),
+  );
 await setCamera('fixed');
 for (const room of rooms) {
   await page.evaluate((r) => window.__btk.play(r), room);

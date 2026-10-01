@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import type { GameAPI, RoomDef } from '../types';
 import type { CameraDef } from '../cameras';
 import { M } from '../../render/materials';
-import { cyl, part, rod } from '../../render/geo';
+import { cyl, part, quad, rod } from '../../render/geo';
 import * as P from '../props';
 import { exit, look, pickup, rect } from './common';
 import { dynamoTick } from '../../game/logic';
 import { DYN_TEXT, emitDynamo, getDyn, hasDynamoListeners, setDyn } from '../../game/dynamo';
 import { damp } from '../../core/math';
+import { startAct2, tickTank2Level } from '../../game/act2';
 
 const DYNAMO_CAM: CameraDef = { id: 'dynClose', pos: [3.0, 2.3, 1.2], look: [5.7, 1.0, -1.0], fov: 55, zones: [] };
 const FURNACE_CAM: CameraDef = { id: 'furnaceClose', pos: [-0.4, 1.6, 1.4], look: [-3.0, 1.0, 4.3], fov: 50, zones: [] };
@@ -48,9 +49,8 @@ async function burnIdol(g: GameAPI, bx: number): Promise<void> {
   g.killAllCreatures();
   await g.wait(1.8);
   g.cutTo(null);
-  await g.say('불 속에서 돌이 갈라지며 비명 같은 소리를 냈다. 배 전체가 한 번 크게 떨렸다.', '…그리고 고요해졌다. 탱크 쪽에서 들려오던 두드림이 멎었다.');
-  if (g.flag('sosSent')) await g.ending();
-  else await g.say('이제 마그누스호에 이 배의 위치를 알려야 한다. 무선실로 가자.');
+  await g.say('불 속에서 돌이 갈라지며 비명 같은 소리를 냈다. 배 전체가 한 번 크게 떨렸다.', '탱크 쪽에서 들려오던 두드림이 멎었다.');
+  await startAct2(g);
 }
 
 // Engine room: x -7..7, z -7.5..8. Boilers along the forward bulkhead, engine centre-aft, dynamo starboard.
@@ -75,8 +75,9 @@ export const engine: RoomDef = {
     { id: 'entry', pos: [6.6, 4.6, -7.2], look: [-0.5, 1.2, 0.5], fov: 56, zones: [rect(2.2, -7.5, 7, -2.4)] },
     { id: 'dynamo', pos: [1.6, 3.5, 2.9], look: [5.6, 0.8, -1.8], fov: 58, zones: [rect(2.2, -2.8, 7, 2.9)] },
     { id: 'stokehold', pos: [-6.5, 3.9, -0.6], look: [1.0, 1.2, 4.6], fov: 58, zones: [rect(-7, 0.6, 7, 4.3)], priority: 1 },
-    { id: 'wtdoor', pos: [-1.1, 4.6, 1.3], look: [-6.5, 0.9, -4.0], fov: 56, zones: [rect(-7, -7.5, -1.7, 1.0)] },
-    { id: 'aft', pos: [2.9, 3.6, -2.2], look: [-3.5, 0.8, -6.6], fov: 58, zones: [rect(-1.9, -7.5, 2.6, -4.3)] },
+    { id: 'wtdoor', pos: [-1.1, 4.6, 1.3], look: [-6.5, 0.9, -4.0], fov: 56, zones: [rect(-7, -5.2, -1.7, 1.0), rect(-7, -7.5, -4.9, -5.2)] },
+    // Also frames the valve chest and pump on the after bulkhead (the wtdoor shot sees them edge-on).
+    { id: 'aft', pos: [2.9, 3.6, -2.2], look: [-3.5, 0.8, -6.6], fov: 58, zones: [rect(-1.9, -7.5, 2.6, -4.3), rect(-4.9, -7.5, -1.7, -5.2)] },
     { id: 'engineSide', pos: [1.9, 4.3, -7.2], look: [0.9, 0.8, 0.2], fov: 55, zones: [rect(0.8, -4.5, 2.4, 0.8)] },
   ],
   build(b, g) {
@@ -248,6 +249,38 @@ export const engine: RoomDef = {
       });
     }
     look(b, 'coal', -5.2, 2.4, '석탄 더미', ['벙커에서 퍼 온 석탄 더미. 삽 손잡이가 아직 따뜻하다.'], 1.3);
+
+    // Bilge and ballast valve chest on the after bulkhead, the general-service pump beside it.
+    b.add(P.valveChest(6), -3.4, 0, -7.0, 0, { dynamic: true, name: 'valveChest' });
+    b.footprint(-3.4, -7.0, 2.4, 0.5);
+    b.add(P.gsPump(), -1.5, 0, -7.05, 0, { dynamic: true, name: 'gsPump' });
+    b.footprint(-1.5, -7.05, 0.75, 0.55);
+    quad(b.staticRoot, M.paperBlank, -3.4, 1.75, -7.42, 0.9, 0.6);
+    b.interact({
+      id: 'valveChest',
+      x: -3.2,
+      z: -6.35,
+      r: 1.3,
+      label: '빌지·밸러스트 밸브 상자',
+      onAction: async (gg) => {
+        if (!gg.flag('act2')) {
+          await gg.say('배 안의 탱크와 빌지를 펌프에 잇는 밸브 상자. 핸들마다 놋쇠 꼬리표가 달려 있다.', '지금은 손댈 일이 없다.');
+          return;
+        }
+        if (!gg.flag('a2.valvesSeen')) {
+          gg.setFlag('a2.valvesSeen');
+          await gg.say(
+            '밸브 상자의 핸들을 하나하나 짚어 본다.',
+            '①해수 흡입과 ③2번 탱크 흡입이 활짝 열려 있다. 펌프는 서 있다. 바닷물이 밸브 상자를 거쳐 2번 탱크로 흘러들고 있었던 것이다.',
+            '누군가 일부러 이렇게 해 두었다. 선장이 탱크 바닥에 있을 때.',
+          );
+        }
+        await gg.openPanel('valves');
+      },
+    });
+    b.interact({ id: 'pumpPlan', x: -2.2, z: -6.5, r: 1.0, label: '배수 계통도', onAction: (gg) => gg.readDoc('pumpPlan') });
+    look(b, 'gsPump', -1.5, -6.4, '잡용 펌프', (gg) =>
+      gg.flag('vc.pump') ? ['증기 복동 펌프가 규칙적으로 헐떡인다.'] : ['증기로 움직이는 복동식 잡용 펌프. 밸브 상자를 거쳐 어느 탱크에서든 물을 빨고, 어디로든 보낼 수 있다.'], 1.0);
     pickup(b, g, { item: 'engineerNotes', x: 4.1, y: 0.92, z: -6.85, ry: 0.3, label: '수첩', r: 1.2 });
   },
   onEnter(g) {
@@ -266,6 +299,15 @@ export const engine: RoomDef = {
     }
   },
   update(g, room, dt, t) {
+    // The general-service pump (second act): pumping tank No.2 while you are down here.
+    tickTank2Level(g, dt);
+    const running = g.flag('act2') && g.flag('vc.pump') && !g.flag('tank2Drained');
+    const rods = room.get('pumpRods');
+    if (rods) rods.position.y = running ? Math.abs(Math.sin(t * 3.4)) * 0.1 : 0;
+    if (running) {
+      const k = Math.floor(t / 0.95);
+      if (k !== Math.floor((t - dt) / 0.95)) g.sfx('pump', { volume: 0.7 });
+    }
     // Dynamo simulation keeps running while you walk around the room.
     const r = dynamoTick(getDyn(g), dt);
     setDyn(g, r.s);

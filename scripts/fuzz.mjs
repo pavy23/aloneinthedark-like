@@ -31,6 +31,9 @@ const flagSets = [
   { power: true },
   { power: true, 'trig:corridor:lightsOnAmbush': true, wtOpen: true },
   { power: true, 'got:idol': true, wtOpen: true, engAmbush: true },
+  // The second act, at various points.
+  { power: true, idolBurned: true, act2: true, 'a2.t0': 0, 'vc.sea': true, 'vc.tank2': true, 'vc.level': 1 },
+  { power: true, idolBurned: true, act2: true, 'a2.t0': 0, pellFreed: true, testUnlocked: true, 'a2.measured': true, tank2Drained: true, tank2Open: true },
 ];
 // Every combination of control scheme and camera gets some rooms.
 const schemes = [
@@ -40,14 +43,14 @@ const schemes = [
   ['tank', 'follow'],
 ];
 let stuck = 0;
-for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold'].entries()) {
+for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2'].entries()) {
   const flags = flagSets[Math.floor(rnd() * flagSets.length)];
   const [controls, camera] = schemes[ri % schemes.length];
   await page.evaluate(([r, f, controls, camera]) => {
     const b = window.__btk;
     b.game.applySettings({ ...b.game.settings, controls, camera });
     b.game.state.flags = { ...f };
-    for (const i of ['crowbar', 'axe', 'cabinKey', 'crank', 'brandy1', 'idol']) if (Math.random() < 0.5) b.give(i);
+    for (const i of ['crowbar', 'axe', 'cabinKey', 'crank', 'brandy1', 'idol', 'testKey', 'brakeKey', 'rum']) if (Math.random() < 0.5) b.give(i);
     return b.play(r);
   }, [room, flags, controls, camera]);
   const t0 = Date.now();

@@ -29,6 +29,7 @@ export const deck: RoomDef = {
     start: { x: -5.1, z: -1.2, h: Math.PI / 2 },
     fromBridge: { x: 4.4, z: -10.9, h: 0 },
     fromCorridor: { x: -2, z: -10.9, h: 0 },
+    fromFcsle: { x: 3.0, z: 5.85, h: Math.PI },
   },
   cameras: [
     // Establishing shot of the midship house with the dark wheelhouse above.
@@ -122,19 +123,28 @@ export const deck: RoomDef = {
     part(sheaves, M.steelDark, 0, -2.2, -0.9, 1.9, 0.9, 0.5);
     b.add(sheaves, 0, 2.2, 12.9, 0, { dynamic: true, name: 'sheaves' });
     b.footprint(0, 12.5, 2.2, 1.2);
-    // The cable: drum -> dynamometer -> over the sheave -> down into the sea.
-    const cable = new THREE.Group();
-    cable.name = 'cable';
-    const pts = [
-      { x: 0, y: 1.9, z: 7.4 },
-      { x: 0, y: 0.95, z: 9.8 },
-      { x: 0, y: 3.05, z: 12.8 },
-      { x: 0, y: 2.6, z: 13.8 },
-      { x: 0, y: -2.6, z: 15.8 },
-      { x: 0, y: -9, z: 18 },
-    ];
-    for (let i = 0; i < pts.length - 1; i++) rod(cable, M.cable, pts[i], pts[i + 1], 0.07, 6);
-    b.add(cable, 0, 0, 0, 0, { dynamic: true, name: 'cable' });
+    // Two cable ends: from each drum, under the dynamometer, over its bow sheave and down into the sea.
+    for (const [side, x] of [
+      ['port', -0.42],
+      ['stbd', 0.42],
+    ] as const) {
+      const cable = new THREE.Group();
+      const pts = [
+        { x, y: 1.9, z: 7.4 },
+        { x: x * 0.5, y: 0.95, z: 9.8 },
+        { x, y: 3.05, z: 12.8 },
+        { x, y: 2.6, z: 13.8 },
+        { x, y: -2.6, z: 15.8 },
+        { x, y: -9, z: 18 },
+      ];
+      for (let i = 0; i < pts.length - 1; i++) rod(cable, M.cable, pts[i], pts[i + 1], 0.07, 6);
+      cable.visible = !g.flag(`ce.${side}Gone`);
+      b.add(cable, 0, 0, 0, 0, { dynamic: true, name: `cable_${side}` });
+    }
+    // Forecastle scuttle (starboard, above the crew's ladder): barred from inside — until the second act,
+    // when it has been torn open.
+    b.add(P.scuttle(g.flag('act2')), 3.0, 0, 7.4, Math.PI, { dynamic: true, name: 'scuttle' });
+    b.footprint(3.0, 7.4, 1.3, 1.4);
     b.add(P.grapnel(), 2.2, 0.05, 10.4, 0.6);
     b.circle(2.2, 10.4, 0.55);
 
@@ -144,8 +154,8 @@ export const deck: RoomDef = {
     b.add(P.ventilator(2.2, 0.28), 4.6, 0, -8.2, -0.4);
     b.circle(4.6, -8.2, 0.4);
     for (const [x, z] of [
-      [-5.2, 7.4],
-      [5.2, 7.4],
+      [-4.85, 5.4],
+      [4.85, 5.4],
       [-5.2, -5.2],
       [5.2, -5.4],
     ]) {
@@ -244,18 +254,95 @@ export const deck: RoomDef = {
         return false;
       },
     });
-    look(b, 'cableEngine', 0, 5.6, '케이블 권양기', [
-      '케이블을 끌어올리는 권양기. 드럼에 젖은 케이블이 감겨 있고, 따개비 같은 것이 군데군데 붙어 있다.',
-      '증기관은 차갑게 식어 있다. 브레이크가 걸린 채다.',
-    ]);
+    exit(b, {
+      id: 'scuttle',
+      x: 3.0,
+      z: 6.4,
+      label: '승강구 (선원 거주구로)',
+      to: 'fcsle',
+      spawn: 'fromDeck',
+      sfx: 'ladder',
+      locked: (gg) =>
+        gg.flag('act2')
+          ? null
+          : ['선원 거주구로 내려가는 승강구. 문이 안쪽에서 빗장으로 잠겨 있다.', '두드려 봐도 대답이 없다. 아래에서 누군가 일부러 막아 둔 것이다.'],
+    });
+    b.interact({
+      id: 'cableEngine',
+      x: 0,
+      z: 5.6,
+      r: 1.3,
+      label: '케이블 권양기',
+      onAction: async (gg) => {
+        if (!gg.flag('act2')) {
+          await gg.say(
+            '케이블을 끌어올리는 권양기. 드럼 두 개에 젖은 케이블이 감겨 있고, 따개비 같은 것이 군데군데 붙어 있다.',
+            '브레이크 레버마다 굵은 고정핀이 박혀 있고, 핀 끝에 맹꽁이자물쇠가 채워져 있다. 누군가 케이블을 절대 풀지 못하게 해 두었다.',
+          );
+          return;
+        }
+        if (gg.flag('cableFreed')) {
+          await gg.say('텅 빈 드럼이 아직 뜨겁다. 케이블은 바다 밑으로 돌아갔다.');
+          return;
+        }
+        if (!gg.hasItem('brakeKey')) {
+          await gg.say(
+            '드럼 위의 케이블이 끊어질 듯 팽팽하다. 배가 끌려갈 때마다 드럼이 한 번씩 덜컹인다.',
+            '브레이크 레버의 고정핀에 맹꽁이자물쇠가 채워져 있다. 이걸 풀지 않고는 케이블을 놓을 수 없다.',
+            ...(gg.flag('a2.measured') ? ['펠이 말했다. 열쇠는 선장의 목에 있다고. 2번 탱크다.'] : []),
+          );
+          return;
+        }
+        if (!gg.flag('a2.measured')) {
+          await gg.say(
+            '열쇠는 손에 있다. 하지만 어느 쪽 드럼을 놓아야 하는지 모른다.',
+            '잘못 풀면 남은 한 가닥에 배 전체가 매달린다. 시험실의 브리지로 두 끝을 재 봐야 한다.',
+          );
+          return;
+        }
+        if (!gg.flag('a2.finale')) {
+          gg.setFlag('a2.finale');
+          gg.sfx('stinger', { volume: 1 });
+          gg.shake(0.15, 1.5);
+          await gg.say('열쇠를 쥐고 레버 앞에 선 순간, 선수 너머에서 젖은 손들이 난간을 붙잡았다.', '그것들이 케이블을 타고 올라오고 있다. 서둘러야 한다!');
+          gg.spawnCreature({ id: 'a2bow1', x: -1.6, z: 12.0, h: Math.PI, hp: 3, entrance: 'rise', speed: 1.2, delay: 1.0 });
+          gg.spawnCreature({ id: 'a2bow2', x: 1.7, z: 11.8, h: Math.PI, hp: 3, entrance: 'rise', speed: 1.15, delay: 4.0 });
+          gg.spawnCreature({ id: 'a2bow3', x: 0.4, z: 12.6, h: Math.PI, hp: 3, entrance: 'rise', speed: 1.25, delay: 9.0 });
+        }
+        await gg.openPanel('cableEngine');
+      },
+    });
     look(b, 'dynamometer', 0, 9.0, '다이나모미터', ['케이블 장력을 재는 계기. 바늘이 눈금 끝에 걸린 채 가늘게 떨고 있다.', '배는 멈춰 있다. 그런데도 케이블은 무언가에 끌려가고 있다.']);
-    look(b, 'sheaves', 0, 11.6, '선수 쉬브', [
-      '케이블이 선수 쉬브를 넘어 검은 바다 속으로 곧게 뻗어 있다.',
-      '손을 대 보니 팽팽하다. 아주 느리게, 규칙적으로 떨린다. 마치 맥박처럼.',
-    ]);
+    look(b, 'sheaves', 0, 11.6, '선수 쉬브', (gg) =>
+      gg.flag('cableFreed')
+        ? ['쉬브가 헛돌며 천천히 멈춰 간다. 케이블은 더 이상 없다.']
+        : [
+            '두 가닥의 케이블이 좌현과 우현 쉬브를 넘어 검은 바다 속으로 곧게 뻗어 있다.',
+            gg.flag('act2') ? '둘 다 끊어질 듯 팽팽하다. 어느 쪽이 더 떨리는지, 눈으로는 알 수 없다.' : '손을 대 보니 팽팽하다. 아주 느리게, 규칙적으로 떨린다. 마치 맥박처럼.',
+          ],
+    );
     look(b, 'grapnel', 2.2, 10.4, '그래플', ['해저의 케이블을 걸어 올리는 갈고리. 끝마다 검은 점액 같은 것이 말라붙어 있다.', '냄새가… 바다 냄새가 아니다. 더 오래되고, 더 깊은 냄새다.']);
     look(b, 'davits', -5.3, -5.3, '빈 대빗', ['구명정 한 척이 사라졌다. 늘어진 줄이 바람에 흔들린다.', '누군가 몹시 서둘러 내린 흔적이다. 받침목이 부서져 있다.']);
-    look(b, 'jacob', -5.5, -1.2, '줄사다리', ['타고 올라온 줄사다리. 아래에는 검은 바다뿐, 보트는 이미 보이지 않는다.']);
+    b.interact({
+      id: 'jacob',
+      x: -5.5,
+      z: -1.2,
+      r: 1.2,
+      label: g.flag('dawn') ? '줄사다리 (보트로)' : '줄사다리',
+      verb: g.flag('dawn') ? '내려가기' : '조사',
+      onAction: async (gg) => {
+        if (!gg.flag('dawn')) {
+          await gg.say('타고 올라온 줄사다리. 아래에는 검은 바다뿐, 보트는 이미 보이지 않는다.');
+          return;
+        }
+        if (gg.flag('pellFreed') && !gg.flag('pellCarried')) {
+          const c = await gg.ask('줄사다리 아래에 마그누스호의 보트가 와 있다. 펠은 아직 선원 거주구에 있다.', [{ label: '펠을 두고 내려간다' }, { label: '그만둔다' }]);
+          if (c !== 0) return;
+        }
+        gg.sfx('ladder');
+        await gg.ending();
+      },
+    });
     look(b, 'prints', 3.6, 2.8, '젖은 발자국', ['우현 난간 너머에서부터 이어진 젖은 발자국. 맨발이다.', '바다에서 기어 올라온 누군가의 발자국이, 해치 앞에서 끊겨 있다.']);
     look(b, 'mast', 0, 3.2, '앞돛대', ['돛대 중간의 등불이 아직 타고 있다. 기름 등이다.', '여드레 동안 사람 없이 떠돌던 배에서, 누가 이 불을 지켰을까.'], 1.0);
     look(b, 'vent', -4, -9.4, '통풍통', ['아래 선실로 공기를 보내는 통풍통. 안에서 차가운 바람이 올라온다. 쇠 긁는 소리 같은 것도.']);
@@ -274,6 +361,7 @@ export const deck: RoomDef = {
       id: 'hatchKnock',
       rect: rect(-3.4, -3.4, 3.4, 3.4),
       once: true,
+      enabled: (gg) => !gg.flag('act2'),
       onEnter: async (gg) => {
         gg.sfx('knock3', { volume: 1.2 });
         gg.shake(0.03, 1.2);
@@ -285,6 +373,7 @@ export const deck: RoomDef = {
       id: 'bow',
       rect: rect(-3, 10.6, 3, 13.5),
       once: true,
+      enabled: (gg) => !gg.flag('act2'),
       onEnter: async (gg) => {
         gg.sfx('creak', { volume: 1.2 });
         gg.shake(0.06, 1.5);
@@ -293,6 +382,31 @@ export const deck: RoomDef = {
         await gg.say('케이블이 한 번 크게 요동쳤다. 쉬브가 삐걱이며 반 바퀴 돌아간다.', '바다 밑의 무언가가, 배를 조금 더 끌어당겼다.');
       },
     });
+  },
+  onEnter(g) {
+    if (g.flag('dawn') && !g.flag('a2.dawnDeck')) {
+      g.setFlag('a2.dawnDeck');
+      void (async () => {
+        await g.wait(0.6);
+        g.sfx('foghorn', { volume: 0.9 });
+        await g.say('안개가 엷어졌다. 잿빛 바다 위로, 마그누스호의 보트가 노를 저어 다가온다.');
+      })();
+    }
+    if (!g.flag('act2') || g.flag('cableFreed')) return;
+    if (!g.flag('a2.deckSeen')) {
+      g.setFlag('a2.deckSeen');
+      void (async () => {
+        await g.wait(0.6);
+        g.sfx('creak', { volume: 1.3 });
+        await g.say(
+          '갑판이 선수 쪽으로 눈에 띄게 기울어 있다. 쉬브 위의 두 케이블이 활시위처럼 팽팽하다.',
+          '선원 거주구로 내려가는 승강구 문이 뜯겨 나가 갑판에 나뒹굴고 있다. 젖은 발자국들이 그 안으로 이어진다.',
+        );
+      })();
+    }
+    if (!g.flag('a2.finale')) {
+      g.spawnCreature({ id: 'a2deck1', x: 4.6, z: 3.0, h: -Math.PI / 2, hp: 3, entrance: 'rise', speed: 1.15, delay: 3.5 });
+    }
   },
   update(g, room, dt, t) {
     const sea = room.get<THREE.Mesh>('sea');
@@ -308,11 +422,16 @@ export const deck: RoomDef = {
     const f2 = room.get('davit2')?.getObjectByName('fall');
     if (f1) f1.rotation.z = Math.sin(t * 1.1) * 0.12;
     if (f2) f2.rotation.z = Math.sin(t * 0.9 + 1) * 0.14;
-    const cable = room.get('cable');
-    if (cable) cable.position.x = Math.sin(t * 2.3) * 0.01;
+    const pulling = g.flag('act2') && !g.flag('cableFreed');
+    for (const side of ['port', 'stbd']) {
+      const cable = room.get(`cable_${side}`);
+      if (cable) cable.position.x = Math.sin(t * (pulling ? 7.3 : 2.3)) * (pulling ? 0.02 : 0.01);
+    }
     const needle = room.get('tension');
-    if (needle) needle.rotation.z = -2.1 + Math.sin(t * 9) * 0.05;
-    void g;
-    void dt;
+    if (needle) needle.rotation.z = g.flag('cableFreed') ? 1.9 : -2.1 + Math.sin(t * (pulling ? 17 : 9)) * (pulling ? 0.09 : 0.05);
+    if (pulling) {
+      const k = Math.floor(t / 6.5);
+      if (k !== Math.floor((t - dt) / 6.5)) g.sfx('creak', { volume: 0.9 });
+    }
   },
 };

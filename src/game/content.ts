@@ -10,6 +10,8 @@ export interface ItemDef {
   kind: 'light' | 'doc' | 'weapon' | 'key' | 'heal' | 'quest';
   doc?: string;
   weapon?: WeaponSpec;
+  /** What drinking it feels like (healing items). */
+  useText?: string;
   model: () => THREE.Object3D;
 }
 
@@ -87,6 +89,33 @@ export const ITEMS: Record<string, ItemDef> = {
   wirelessLog: { id: 'wirelessLog', name: '무선 통신 일지', desc: '무선실 통신사의 송수신 기록.', kind: 'doc', doc: 'wirelessLog', model: () => P.bookItem(M.woodDark) },
   letter: { id: 'letter', name: '부치지 못한 편지', desc: '갑판원이 쓰다 만 편지.', kind: 'doc', doc: 'letter', model: () => P.paperItem(M.paper) },
   testRecord: { id: 'testRecord', name: '케이블 시험 기록', desc: '전기기사의 절연·도통 시험 기록지.', kind: 'doc', doc: 'testRecord', model: () => P.paperItem(M.paper) },
+  // ---- Act 2
+  testKey: {
+    id: 'testKey',
+    name: '시험실 열쇠',
+    desc: '"TESTING ROOM · H.B."라고 새긴 놋쇠 꼬리표가 달린 열쇠. 통신사 펠이 건네주었다.',
+    kind: 'key',
+    model: P.keyItem,
+  },
+  brakeKey: {
+    id: 'brakeKey',
+    name: '고정핀 자물쇠 열쇠',
+    desc: '헤일 선장의 목에 걸려 있던 묵직한 열쇠. 케이블 권양기 브레이크 고정핀의 자물쇠를 연다.',
+    kind: 'key',
+    model: P.bigKeyItem,
+  },
+  rum: {
+    id: 'rum',
+    name: '럼 병',
+    desc: '선원 거주구 사물함 깊숙이 숨겨져 있던 럼. 반쯤 남았다. (체력 회복)',
+    kind: 'heal',
+    useText: '럼을 한 모금 들이켰다. 독한 술이 식도를 태우며 내려가고, 곱은 손끝에 피가 돈다.',
+    model: P.bottle,
+  },
+  bosunNotes: { id: 'bosunNotes', name: '갑판장의 수첩', desc: '바닷물에 불은 갑판장의 수첩.', kind: 'doc', doc: 'bosunNotes', model: () => P.bookItem(M.leather) },
+  testManual: { id: 'testManual', name: '고장점 측정 요령', desc: '시험실 책상에 붙어 있던 측정 요령 카드.', kind: 'doc', doc: 'testManual', model: () => P.paperItem(M.paper) },
+  baleNote: { id: 'baleNote', name: '베일의 측정 기록', desc: '전기기사 베일이 마지막으로 남긴 측정 기록.', kind: 'doc', doc: 'baleNote', model: () => P.paperItem(M.paper) },
+  haleLetter: { id: 'haleLetter', name: '선장의 마지막 편지', desc: '방수포에 싸인 채 선장의 가슴 주머니에 들어 있던 편지.', kind: 'doc', doc: 'haleLetter', model: () => P.paperItem(M.paper) },
 };
 
 export interface DocDef {
@@ -164,6 +193,49 @@ export const DOCS: Record<string, DocDef> = {
     style: 'typed',
     pages: [
       `시험실 기록 / 1925. 10. 4\n\n대상: 인양 케이블 (선수 탱크, 절단단 A)\n방법: 미러 검류계를 사용한 저항(브리지) 시험\n\n절연저항: 측정 불가 — 값이 계속 변동.\n도통: 절단단이 어디에도 접속되어 있지 않음에도 검류계 광점이 주기적으로 편향.\n\n편향 기록(장·단):\n· · ·   — — —   · · ·\n· · ·   — — —   · · ·\n\n소견: 해수 유도전류로 보기 어려움. 규칙성이 지나치게 뚜렷함.\n(여백에 연필로) 이건 우리가 치는 신호다. 누가 밑에서 우리 흉내를 낸다.`,
+    ],
+  },
+  // ---- Act 2
+  bosunNotes: {
+    id: 'bosunNotes',
+    title: '갑판장 J. 도노번의 수첩',
+    style: 'hand',
+    pages: [
+      `10월 6일 저녁\n선수 흘수표가 어제보다 한 뼘 더 잠겼다. 배는 멈춰 있는데 선수만 자꾸 숙인다. 쉬브 위의 케이블 두 가닥이 맥박처럼 떤다.\n\n선장은 케이블을 놓지 않겠다고 한다. 회사 재산이라나. 권양기 브레이크마다 고정핀을 박고 자물쇠를 채웠다. 열쇠는 자기 목에.`,
+      `10월 7일\n오늘 밤 1번 구명정을 내린다. 맥컬리, 리드, 해리스, 그리고 나. 펠은 무선을 지키겠다고 남는다. 고집쟁이.\n\n펠에게 일러두었다. 거주구 승강구는 안에서 빗장을 걸 것. 돌아오는 놈이 있으면 — 그게 우리라도 — 열어 주지 마라.\n\n둘이서 신호를 정했다. 진짜 사람은 두드림을 따라 하지 않는다. 대답을 한다.`,
+    ],
+  },
+  testManual: {
+    id: 'testManual',
+    title: '고장점 측정 요령 — 휘트스톤 브리지 · 미러 검류계',
+    style: 'typed',
+    pages: [
+      `전기기사 H. 베일\n\n1. 단자반에서 시험할 케이블 끝을 고른다.  B — 좌현 쉬브,  C — 우현 쉬브.\n2. 비율 팔을 고른다. 다이얼 네 자리를 다 쓰도록, 값이 넘치지 않는 가장 작은 비율로.\n   수십 Ω 이하는 10 : 1000 (×0.01), 수천 Ω은 1000 : 1000 (×1).\n3. 검류계에 분류기 1/999를 끼우고 다이얼로 광점을 대강 영점에 모은다. 1/99, 1/9로 갈아 끼우며 좁혀 간다.\n4. 분류기를 빼고(최대 감도) 마지막 자리까지 맞춘다. 광점이 영점에서 움직이지 않으면 균형이다.\n   다이얼 값 × 비율 = 측정 저항.\n   (고장점이 움직이는 것 같으면 시간을 두고 다시 잰다.)`,
+      `5. 완전 단선 — 끊어진 심선이 그 자리에서 바닷물에 닿아 있을 때:\n   고장점까지의 거리(해리) = 측정 저항 ÷ 해리당 도체 저항\n\n   본선 케이블 심선(구리 300파운드/해리):\n   해리당 4.27 Ω (24 °C) — 해저 수온 약 3 °C에서는 약 3.9 Ω\n\n   ※ 끊어진 구리 끝이 제 저항을 보태므로, 실제 고장점은 계산보다 조금 가깝다.\n6. 끝이 육지국까지 건전하게 이어져 있으면, 끝에서 접지된 육지국 계기까지의 저항이 나온다.`,
+    ],
+  },
+  baleNote: {
+    id: 'baleNote',
+    title: '베일의 측정 기록',
+    style: 'hand',
+    pages: [
+      `10월 6일  03:10  고장점 2.9해리\n           07:40  2.6해리\n           12:15  2.2해리\n\n고장점은 움직이지 않는다. 고장점은 움직이지 않는다. 고장점은 움직이지 않는다.\n\n10월 7일  2.2해리. 멈췄다. 돌을 탱크에 사려 둔 뒤로 멈췄다. 기다리는 것이다. 돌을. 손가락을 돌려받기를.\n\n(아래, 떨리는 글씨)\n그 돌이 불 속에서 죽으면, 그것이 올라온다. 케이블을 한 칸씩, 한 칸씩.`,
+    ],
+  },
+  pumpPlan: {
+    id: 'pumpPlan',
+    title: '빌지·밸러스트 밸브 상자 — C.S. 탈라사 기관실',
+    style: 'plate',
+    pages: [
+      `흡입측 (열면 그 구획에서 빤다)\n  ① 해수 흡입 (씨 체스트)\n  ② 1번 탱크 흡입\n  ③ 2번 탱크 흡입\n  ④ 기관실 빌지 흡입\n\n배출측 (열면 그리로 보낸다)\n  ⑤ 선외 배출\n  ⑥ 2번 탱크 주수\n\n잡용 펌프: 증기 복동식.  흡입측 → 펌프 → 배출측\n\n※ 빌지 흡입관에는 나사 내림식 역지 밸브가 있다.\n  탱크 흡입·주수관은 물을 넣고 빼야 하므로 역지 밸브가 없다.\n※ 케이블 탱크는 흘수선 아래에 있다. 해수 흡입과 탱크 쪽 밸브를\n  함께 열어 두면, 펌프가 서 있어도 바닷물이 탱크로 흘러든다.`,
+    ],
+  },
+  haleLetter: {
+    id: 'haleLetter',
+    title: '선장 아서 헤일의 마지막 편지',
+    style: 'hand',
+    pages: [
+      `마거릿.\n\n탱크의 물을 빼고 사리를 끊을 생각이었소. 톱이 들지 않소. 강철 외장선이 산 것처럼 톱날을 무는구려.\n\n누군가 기관실 밸브를 열었소. 물이 다시 차오르고 있소. 위로 올라갈 수 없을 것 같소.\n\n펠에게 열쇠를 맡겼어야 했소. 회사 재산 따위. 이 배를 바다 밑에 묶어 둔 건 그것이 아니라 내 고집이었소.\n\n누구든 이 편지를 읽는 사람에게. 불을 꺼뜨리지 마시오. 그리고 케이블을 놓으시오.\n\n— A. H.`,
     ],
   },
   morse: {

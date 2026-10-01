@@ -45,7 +45,7 @@ export function newState(): GameState {
   };
 }
 
-const ROOMS: RoomId[] = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold'];
+const ROOMS: RoomId[] = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2'];
 
 /** Validate untrusted JSON (localStorage can hold anything) into a GameState or null. */
 export function parseState(raw: unknown): GameState | null {

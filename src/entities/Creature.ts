@@ -47,6 +47,9 @@ export class Creature {
     speed: number,
     delay: number,
     private ev: CreatureEvents,
+    readonly variant: 'crew' | 'captain' = 'crew',
+    /** Hit points a blow takes from the player. */
+    readonly strength = 1,
   ) {
     this.x = x;
     this.z = z;
@@ -55,25 +58,53 @@ export class Creature {
     this.speed = speed;
     this.delay = delay;
     this.state = entrance === 'rise' ? 'rising' : 'hunt';
-    this.rig = new HumanRig({
-      colors: {
-        coat: 0x1e2a33,
-        coatDark: 0x11171c,
-        trousers: 0x2a2b26,
-        shoes: 0x14140f,
-        skin: 0x86927e,
-        shirt: 0x3a4a3c,
-        hair: 0x1a2218,
-        eyes: 0xc8e0b0,
-      },
-      bulk: 1.18,
-      upperArm: 0.38,
-      forearm: 0.4,
-      handSize: 1.4,
-      headSize: 0.21,
-      torso: 0.6,
-      seaweed: true,
-    });
+    this.rig =
+      variant === 'captain'
+        ? new HumanRig({
+            // The master in his reefer jacket and cap, a week under water.
+            colors: {
+              coat: 0x18203a,
+              coatDark: 0x0c1020,
+              trousers: 0x161b2c,
+              shoes: 0x0c0c0a,
+              skin: 0x8c9a86,
+              shirt: 0xb8b8a8,
+              hat: 0x10162a,
+              hatBand: 0xa8904a,
+              hair: 0x9a9a92,
+              accent: 0xb89a48,
+              eyes: 0xd8f0c0,
+            },
+            scale: 1.07,
+            bulk: 1.26,
+            upperArm: 0.4,
+            forearm: 0.42,
+            handSize: 1.5,
+            headSize: 0.21,
+            torso: 0.62,
+            hat: true,
+            coatSkirt: true,
+            seaweed: true,
+          })
+        : new HumanRig({
+            colors: {
+              coat: 0x1e2a33,
+              coatDark: 0x11171c,
+              trousers: 0x2a2b26,
+              shoes: 0x14140f,
+              skin: 0x86927e,
+              shirt: 0x3a4a3c,
+              hair: 0x1a2218,
+              eyes: 0xc8e0b0,
+            },
+            bulk: 1.18,
+            upperArm: 0.38,
+            forearm: 0.4,
+            handSize: 1.4,
+            headSize: 0.21,
+            torso: 0.6,
+            seaweed: true,
+          });
     this.object.add(this.rig.root);
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M.shadow.m);
     this.shadow.rotation.x = -Math.PI / 2;

@@ -30,6 +30,7 @@ export const corridor: RoomDef = {
     fromCabin: { x: -3.2, z: 0.3, h: Math.PI },
     fromRadio: { x: 2.6, z: 0.3, h: Math.PI },
     fromEngine: { x: 7.5, z: -2.2, h: 0 },
+    fromTestroom: { x: -2.6, z: -0.3, h: 0 },
   },
   cameras: [
     { id: 'lobby', pos: [-5.15, 2.2, -1.75], look: [-7.7, 0.7, 0.9], fov: 60, zones: [rect(-8, -2, -4.9, 2)] },
@@ -52,7 +53,7 @@ export const corridor: RoomDef = {
     b.wall(-5, -2, -5, -1, { h: H, mat: wall });
     // Main run
     b.wall(-5, 1, 6, 1, { h: H, mat: wall, gaps: [{ at: 1.8, w: 0.9, h: 1.95 }, { at: 7.6, w: 0.9, h: 1.95 }] });
-    b.wall(-5, -1, 6, -1, { h: H, mat: wall });
+    b.wall(-5, -1, 6, -1, { h: H, mat: wall, gaps: [{ at: 2.4, w: 0.9, h: 1.95 }] });
     // Vestibule
     b.wall(6, 1, 9, 1, { h: H, mat: wall });
     b.wall(9, -3, 9, 1, { h: H, mat: wall });
@@ -66,6 +67,8 @@ export const corridor: RoomDef = {
     b.add(P.shipDoor(0.8, 1.9, M.woodDark), 2.6, 0, 1.0, Math.PI);
     b.add(P.shipDoor(0.8, 1.9, M.steelDark), 7.5, 0, -3.0, 0);
     b.add(P.shipDoor(0.8, 1.9, M.steelDark), -8.0, 0, 0, Math.PI / 2);
+    b.add(P.shipDoor(0.8, 1.9, M.woodDark), -2.6, 0, -1.0, 0);
+    b.box(-2.6, 2.02, -0.9, 0.36, 0.1, 0.02, M.brass);
     // Brass door plates
     b.box(-3.2, 2.02, 0.9, 0.36, 0.1, 0.02, M.brass);
     b.box(2.6, 2.02, 0.9, 0.36, 0.1, 0.02, M.brass);
@@ -171,6 +174,18 @@ export const corridor: RoomDef = {
       unlockText: '선장실 열쇠를 꽂아 돌린다. 딸깍 — 문이 열렸다.',
     });
     exit(b, { id: 'radioDoor', x: 2.6, z: 0.55, label: '무선실 문', to: 'radio', spawn: 'fromCorridor' });
+    exit(b, {
+      id: 'testDoor',
+      x: -2.6,
+      z: -0.55,
+      label: '시험실 문',
+      to: 'testroom',
+      spawn: 'fromCorridor',
+      locked: (gg) => (gg.flag('testUnlocked') ? null : ['잠겨 있다. 놋쇠 명패에 "CABLE TESTING ROOM — 관계자 외 출입 금지"라고 새겨져 있다.', '안쪽에서 아주 희미하게, 시계 초침 같은 딸깍거림이 들린다.']),
+      unlockWith: 'testKey',
+      unlockFlag: 'testUnlocked',
+      unlockText: '베일의 열쇠를 꽂아 돌린다. 딸깍 — 시험실 문이 열렸다.',
+    });
     exit(b, { id: 'engineDoor', x: 7.5, z: -2.55, label: '기관실 문', to: 'engine', spawn: 'fromCorridor', sfx: 'door' });
     look(b, 'photos', -0.9, 0.45, '액자 두 개', [
       '빛바랜 사진 두 장이 나란히 걸려 있다.',
