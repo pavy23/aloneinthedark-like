@@ -243,6 +243,154 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   await page.close();
 }
 
+// ---------------------------------------------------------------- 7. control schemes and the follow camera
+{
+  const page = await open();
+  const hold = async (key, ms) => {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(ms);
+    await page.keyboard.up(key);
+    await page.waitForTimeout(150);
+  };
+  const scheme = (controls, camera) =>
+    page.evaluate(([controls, camera]) => {
+      const g = window.__btk.game;
+      g.applySettings({ ...g.settings, controls, camera });
+    }, [controls, camera]);
+  const place = async (x, z, h) => {
+    // Let the room's entry lines finish first (input is ignored while a script is talking).
+    for (let i = 0; i < 40; i++) {
+      await page.evaluate(() => window.__btk.game.ui.clearMessages());
+      const s = await info(page);
+      if (!s.busy && !s.ui) break;
+      await page.waitForTimeout(100);
+    }
+    await page.evaluate(([x, z, h]) => {
+      const g = window.__btk.game;
+      g.pl.place(x, z, h);
+      g.followSnap = true;
+    }, [x, z, h]);
+  };
+
+  // (a) Default: push where you want to go on screen. Facing +Z with the camera behind him,
+  //     screen-right is world -X, so holding → walks him off to the -X side.
+  await page.evaluate(() => window.__btk.play('deck', 0, -3, 0));
+  const defaults = await page.evaluate(() => [window.__btk.game.settings.controls, window.__btk.game.settings.camera]);
+  check(defaults[0] === 'direct' && defaults[1] === 'follow', `defaults are screen-relative controls + follow camera (${defaults})`);
+  await place(0, -3, 0);
+  await page.waitForTimeout(300);
+  await hold('ArrowRight', 900);
+  let s = await info(page);
+  check(s.x < -0.6 && Math.abs(s.z + 3) < 0.6, `→ walks to screen right (x 0 -> ${s.x.toFixed(2)}, z ${s.z.toFixed(2)})`);
+  const camBehind = await page.evaluate(() => {
+    const g = window.__btk.game;
+    const c = g.camera.position;
+    return { d: Math.hypot(c.x - g.pl.x, c.z - g.pl.z), vis: g.pl.object.visible };
+  });
+  check(camBehind.d > 1.5 && camBehind.d < 3.6 && camBehind.vis, `follow camera stays with him (${camBehind.d.toFixed(2)} m, visible ${camBehind.vis})`);
+
+  // (b) The 1992 scheme: ← → turn on the spot, ↑ walks where he faces; the camera uses the fixed shots.
+  await scheme('tank', 'fixed');
+  await place(0, -3, 0);
+  await page.waitForTimeout(300);
+  await hold('ArrowRight', 500);
+  s = await info(page);
+  check(Math.abs(s.x) < 0.05 && Math.abs(s.z + 3) < 0.05 && Math.abs(s.h) > 0.5, `tank: → turns on the spot (h 0 -> ${s.h.toFixed(2)})`);
+  const h0 = s.h;
+  await hold('ArrowUp', 700);
+  s = await info(page);
+  const along = (s.x - 0) * Math.sin(h0) + (s.z + 3) * Math.cos(h0);
+  check(along > 0.5, `tank: ↑ walks the way he faces (${along.toFixed(2)} m)`);
+  const fixed = await page.evaluate(() => {
+    const g = window.__btk.game;
+    const p = g.camera.position;
+    return g.current.def.cameras.some((c) => Math.hypot(c.pos[0] - p.x, c.pos[1] - p.y, c.pos[2] - p.z) < 0.2);
+  });
+  check(fixed, 'tank: the view is one of the fixed camera shots');
+  await scheme('direct', 'follow');
+
+  // (c) Wherever he walks, the follow camera never ends up behind a wall, outside the room or in a doorway.
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold']) {
+    await page.evaluate((r) => window.__btk.play(r), room);
+    await page.waitForTimeout(150);
+    const res = await page.evaluate(async () => {
+      const g = window.__btk.game;
+      const room = g.current;
+      const b = room.def.bounds;
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      // Only places he can actually walk to (the bounds also cover the void behind the walls).
+      const step = 0.25;
+      const W = Math.ceil((b.maxX - b.minX) / step);
+      const H = Math.ceil((b.maxZ - b.minZ) / step);
+      const at = (i, j) => [b.minX + (i + 0.5) * step, b.minZ + (j + 0.5) * step];
+      const free = (x, z) => room.col.pointFree(x, z, 0.3);
+      const seen = new Uint8Array(W * H);
+      const queue = [];
+      const cells = [];
+      for (const sp of Object.values(room.def.spawns)) {
+        const i = Math.floor((sp.x - b.minX) / step);
+        const j = Math.floor((sp.z - b.minZ) / step);
+        if (i >= 0 && j >= 0 && i < W && j < H && !seen[j * W + i]) {
+          seen[j * W + i] = 1;
+          queue.push([i, j]);
+        }
+      }
+      while (queue.length) {
+        const [i, j] = queue.pop();
+        const [x, z] = at(i, j);
+        cells.push([x, z]);
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di;
+          const nj = j + dj;
+          if (ni < 0 || nj < 0 || ni >= W || nj >= H || seen[nj * W + ni]) continue;
+          const [nx, nz] = at(ni, nj);
+          if (!free(nx, nz) || !free((x + nx) / 2, (z + nz) / 2)) continue;
+          seen[nj * W + ni] = 1;
+          queue.push([ni, nj]);
+        }
+      }
+      const cross = (ax, az, bx, bz, cx, cz, dx, dz) => {
+        const d = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
+        if (Math.abs(d) < 1e-12) return false;
+        const t = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / d;
+        const u = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / d;
+        return t > 0 && t < 1 && u >= 0 && u <= 1;
+      };
+      const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+      let frames = 0;
+      const bad = [];
+      for (let k = 0; k < 10; k++) {
+        const [x, z] = cells[Math.floor(rnd() * cells.length)];
+        g.ui.clearMessages();
+        g.pl.place(x, z, rnd() * Math.PI * 2);
+        g.followSnap = true;
+        const a = rnd() * Math.PI * 2;
+        g.input.setStick(Math.sin(a), Math.cos(a), true);
+        for (let f = 0; f < 45; f++) {
+          await frame();
+          if (g.busy) g.ui.clearMessages();
+          if (g.current !== room) break; // walked through a door: done with this sample
+          frames++;
+          const c = g.camera.position;
+          const out = c.x < b.minX || c.x > b.maxX || c.z < b.minZ || c.z > b.maxZ;
+          const through = room.camWalls.some((w) => cross(g.pl.x, g.pl.z, c.x, c.z, w[0], w[1], w[2], w[3]));
+          if (out || through) bad.push([+g.pl.x.toFixed(2), +g.pl.z.toFixed(2), +c.x.toFixed(2), +c.z.toFixed(2)]);
+          if (f === 30) {
+            const a2 = rnd() * Math.PI * 2;
+            g.input.setStick(Math.sin(a2), Math.cos(a2), true);
+          }
+        }
+        g.input.setStick(0, 0, false);
+        if (g.current !== room) break;
+      }
+      return { frames, bad: bad.length, sample: bad.slice(0, 4) };
+    });
+    check(res.bad === 0 && res.frames > 100, `${room}: follow camera stayed inside the room for ${res.frames} frames${res.bad ? ` (outside ${res.bad}: ${JSON.stringify(res.sample)})` : ''}`);
+  }
+  await page.close();
+}
+
 console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');
 await browser.close();
 server.kill();

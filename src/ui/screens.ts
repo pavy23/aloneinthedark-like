@@ -37,7 +37,7 @@ export function openTitle(g: Game): Modal {
       h('div', { class: 'sub', text: '북대서양 · 1925년 10월' }),
     ),
     menu,
-    h('div', { class: 'foot', text: '고정 카메라 3D 탐험·퍼즐 어드벤처 · 모든 그래픽과 사운드는 코드로 생성 · 키보드 / 게임패드 / 터치' }),
+    h('div', { class: 'foot', text: '3D 3인칭 탐험·퍼즐 어드벤처 · 모든 그래픽과 사운드는 코드로 생성 · 키보드 / 게임패드 / 터치' }),
   );
   const nav = new FocusNav(menu, g.audio);
   let t = 0;
@@ -270,6 +270,8 @@ export function openSettings(g: Game): void {
   };
   const render = () => {
     rows.replaceChildren();
+    cycle('조작 방식', ['direct', 'tank'] as Array<'direct' | 'tank'>, () => s.controls, (v) => (s.controls = v), (v) => (v === 'direct' ? '누른 방향으로 이동 (기본)' : '탱크 조작 (1992 원작)'));
+    cycle('카메라', ['follow', 'fixed'] as Array<'follow' | 'fixed'>, () => s.camera, (v) => (s.camera = v), (v) => (v === 'follow' ? '플레이어 추적 (기본)' : '고정 카메라 (원작)'));
     cycle('해상도', [240, 360, 480] as const as unknown as Array<240 | 360 | 480>, () => s.res, (v) => (s.res = v), (v) => `${(v * 4) / 3}×${v}${v === 240 ? ' (1992)' : ''}`);
     cycle('디더링', [true, false], () => s.dither, (v) => (s.dither = v), (v) => (v ? '켬' : '끔'));
     cycle('색 단계', [8, 12, 20, 32, 64], () => s.levels, (v) => (s.levels = v), (v) => `${v}단계${v <= 8 ? ' (EGA 느낌)' : v <= 12 ? ' (VGA 느낌)' : ''}`);
@@ -294,23 +296,29 @@ export function openHelp(g: Game): void {
     'div',
     { class: 'panel' },
     h('div', { class: 'eyebrow', text: 'CONTROLS · 조작법' }),
-    h('h2', { text: '탱크식 조작 — 원작 그대로' }),
-    h('p', { class: 'muted', text: '위 키는 캐릭터가 바라보는 방향으로 전진합니다. 카메라가 바뀌어도 조작 방향은 바뀌지 않습니다.' }),
+    ...(g.settings.controls === 'direct'
+      ? [
+          h('h2', { text: '누른 방향으로 걷기' }),
+          h('p', { class: 'muted', text: '방향키·스틱을 화면에서 가고 싶은 쪽으로 누르면 그쪽으로 돌아서 걷습니다. 방향키를 누르고 있는 동안에는 카메라가 돌거나 바뀌어도 걷던 방향이 그대로 유지됩니다.' }),
+        ]
+      : [
+          h('h2', { text: '탱크 조작 — 1992년 원작 방식' }),
+          h('p', { class: 'muted', text: '↑는 캐릭터가 바라보는 방향으로 전진, ←→는 제자리 회전입니다. 카메라가 바뀌어도 조작 방향은 바뀌지 않습니다.' }),
+        ]),
     h(
       'div',
       { class: 'help-grid' },
-      kv('↑ / W', '전진'),
-      kv('↓ / S', '후진'),
-      kv('← → / A D', '제자리 회전'),
-      kv('Shift · ↑ 두 번', '달리기'),
-      kv('↓ + Shift', '뒤로 돌기'),
+      ...(g.settings.controls === 'direct'
+        ? [kv('방향키 / WASD / 스틱', '누른 방향으로 이동'), kv('Shift · 스틱 끝까지', '달리기')]
+        : [kv('↑ / W', '전진'), kv('↓ / S', '후진'), kv('← → / A D', '제자리 회전'), kv('Shift · ↑ 두 번', '달리기'), kv('↓ + Shift', '뒤로 돌기')]),
+      ...(g.settings.camera === 'follow' ? [kv('C / Q', '카메라를 등 뒤로')] : []),
       kv('Space / E / Enter', '조사 · 열기 · 줍기 · 밀기'),
       kv('F / J / Ctrl', '공격 (든 무기, 없으면 발차기)'),
       kv('I / Tab', '소지품 · 상태'),
-      kv('Esc / P', '일시정지 · 저장'),
-      kv('게임패드', 'A 조사 · X 공격 · Y 소지품 · B 달리기'),
+      kv('Esc / P', '일시정지 · 저장 · 설정'),
+      kv('게임패드', 'A 조사 · X 공격 · Y 소지품 · B 달리기 · RB 카메라'),
     ),
-    h('p', { class: 'muted', text: '물건을 쓰려면 그 앞에 서서 소지품에서 "사용"을 고르세요. 문을 지날 때마다 자동 기록됩니다.' }),
+    h('p', { class: 'muted', text: '설정에서 조작 방식(누른 방향 / 탱크)과 카메라(플레이어 추적 / 고정)를 바꿀 수 있습니다. 물건을 쓰려면 그 앞에 서서 소지품에서 "사용"을 고르세요. 문을 지날 때마다 자동 기록됩니다.' }),
     h('div', { class: 'row' }, button('닫기', () => g.ui.pop(modal))),
   );
   const el = h('div', { class: 'modal' }, panel);

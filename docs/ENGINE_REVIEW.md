@@ -10,7 +10,7 @@
 
 | 목표 | 권장 | 이유 |
 |---|---|---|
-| 지금 단계: 콘셉트 검증, 링크로 바로 공유하는 플레이어블 데모, 1인 개발 | **웹(three.js)** — 이번 구현 | 설치 없이 URL로 실행되고, 번들이 작고(이 게임 JS 약 212 KB gzip), 라이선스 비용과 벤더 리스크가 없습니다. 고정 카메라에 저해상도라 렌더링 부하가 작아 웹의 약점이 드러나지 않습니다. |
+| 지금 단계: 콘셉트 검증, 링크로 바로 공유하는 플레이어블 데모, 1인 개발 | **웹(three.js)** — 이번 구현 | 설치 없이 URL로 실행되고, 번들이 작고(이 게임 JS 약 215 KB gzip), 라이선스 비용과 벤더 리스크가 없습니다. 320×240 저해상도라 추적 카메라로 방 전체를 보여 줘도 렌더링 부하가 작아 웹의 약점이 드러나지 않습니다. |
 | 다음 단계: 스팀·콘솔 상용 출시, 스키닝 캐릭터·컷신·대량 아트 에셋, 아티스트·디자이너와 협업 | **Unity** (대안: Godot) | 에디터, 애니메이션 리타깃, 라이트맵 베이크, 타임라인, 멀티플랫폼 빌드 같은 제작 도구가 생산성을 좌우합니다. |
 
 권장 경로는 **웹으로 재미를 검증한 뒤 Unity로 본 개발**하는 2단계입니다. [판단] 이 프로젝트는 방·카메라 존·퍼즐 상태를 데이터와 순수 함수로 분리해 두었기 때문에 옮기기 어렵지 않습니다(6장).
@@ -47,7 +47,7 @@
 |---|---|---|
 | three.js | MIT 라이선스. 현재 r186(0.186.0: 2026-09-08, 0.186.1: 2026-09-24). r186부터 ESM 전용입니다. | [S34] (D) |
 | three.js WebGPU | `three/webgpu` 진입점은 r171(2024-11)에 생겼습니다. 공식 매뉴얼(2026-07 수정)은 WebGPURenderer를 **"아직 실험 단계"**로 적고 있습니다. "r171부터 프로덕션 준비 완료"라는 제3자 주장은 공식 문서로 뒷받침되지 않습니다. | [S36][S37] (D) |
-| three.js 용량 | 조사 측 측정(esbuild): three 전체 743 KB(minified) / 189 KB(gzip), 최소 장면 534 KB / 133 KB(gzip). **이 게임의 실측: JS 762 KB min / 212 KB gzip, CSS 13 KB.** | 조사 측정, 본 저장소 빌드 로그 |
+| three.js 용량 | 조사 측 측정(esbuild): three 전체 743 KB(minified) / 189 KB(gzip), 최소 장면 534 KB / 133 KB(gzip). **이 게임의 실측: JS 773 KB min / 215 KB gzip, CSS 13 KB.** | 조사 측정, 본 저장소 빌드 로그 |
 | Babylon.js | Apache-2.0. 9.0 출시(2026-03-26), 최신 9.28.0. 브라우저 기반 Node Material Editor 제공. | [S39][S40][S41] |
 | PlayCanvas | 엔진 MIT. 최신 2.22.6. WebGL2·WebGPU 기반이며 브라우저 에디터가 있습니다(요금제 Free / Personal 월 $15 / Organization 좌석당 월 $50). | [S42][S43][S45] |
 | Godot | 최신 4.7(2026-06). 웹 내보내기는 WebGL 2(Compatibility 렌더러)만 지원하고 WebGPU는 미지원입니다. 스레드를 쓰려면 교차 출처 격리가 필요하며, 4.3부터 단일 스레드 내보내기가 가능합니다. **C#(.NET) 프로젝트는 Godot 4에서 웹으로 내보낼 수 없습니다.** | [S47][S48][S49] (D) |
@@ -86,15 +86,17 @@
 
 ## 5. 이 장르에서 특히 고려할 점
 
-- **원작의 기법.** Alone in the Dark(1992)는 평면 색칠한 폴리곤 캐릭터를 미리 그린 2D 배경 위에 올렸고, 이 조합 때문에 카메라를 고정해야 했습니다 [H1]. 이번 구현은 배경도 실시간 3D로 그리되, 320×240 저해상도·디더링·고정 카메라로 그 인상을 재현했습니다.
+- **원작의 기법.** Alone in the Dark(1992)는 평면 색칠한 폴리곤 캐릭터를 미리 그린 2D 배경 위에 올렸고, 이 조합 때문에 카메라를 고정해야 했습니다 [H1]. 이번 구현은 배경도 실시간 3D로 그리되, 320×240 저해상도·디더링·고정 카메라로 그 인상을 재현했습니다(현재 기본값은 플레이어 추적 카메라이고, 고정 카메라는 설정에서 고릅니다).
 - **프리렌더 배경을 쓰려면 Unity가 유리합니다.** [판단] 오프라인 렌더링한 배경과 깊이 버퍼를 합성하는 방식은 웹에서도 가능하지만, 라이트맵·렌더 텍스처·카메라별 베이크 도구를 갖춘 에디터 환경이 작업량을 크게 줄여 줍니다.
 - **고정 카메라 전환 로직은 엔진과 무관합니다.** 이 저장소의 `selectCamera`(존 기반 + 히스테리시스)는 Unity에서는 트리거 콜라이더와 가상 카메라 조합으로 거의 그대로 옮겨집니다.
+- **추적 카메라는 Unity에 기성품이 있습니다.** 이 저장소의 `FollowCam`(벽 선 2D 광선 + 대리 메시 3D 광선 + 빈 공간 탐색)을 웹에서는 직접 짜야 했지만, Unity에서는 Cinemachine 3의 ThirdPersonFollow(장애물 회피 내장)나 Deoccluder 확장(2.x의 CinemachineCollider가 3.0에서 이름이 바뀜)으로 대체됩니다 [S60][S61]. 화면 기준 조작의 기저 변환(`src/game/controls.ts`)은 몇 줄짜리 벡터 계산이라 C#으로 그대로 옮기면 됩니다.
 
 ## 6. Unity로 옮길 때의 이식 경로
 
 | 이 저장소 | Unity 대응 |
 |---|---|
 | `src/world/rooms/*.ts`의 `cameras`(위치·시선·존 사각형) | 존마다 트리거 콜라이더와 가상 카메라 하나씩, 존 진입 시 우선순위 전환 |
+| `src/game/FollowCam.ts`, `src/game/controls.ts`(추적 카메라, 화면 기준 조작) | Cinemachine ThirdPersonFollow 또는 Deoccluder [S60][S61], 입력은 Input System 액션 + 카메라 기준 벡터 변환 |
 | `Interactable`(앵커·도달 거리·시야각·핸들러) | 상호작용 컴포넌트 + 플레이어 전방 레이/오버랩 검사 |
 | 플래그·인벤토리·`GameState`(JSON) | ScriptableObject/직렬화 세이브 시스템(JSON 형식 그대로 재사용 가능) |
 | `src/game/logic.ts`(발전기·모스·금고 상태 머신) | 순수 로직이라 C#로 1:1 포팅 가능, 단위 테스트도 함께 이식 |
@@ -153,4 +155,6 @@
 - [S56] UE 4.24 릴리스 노트: https://docs.unrealengine.com/en-US/WhatsNew/Builds/ReleaseNotes/4_24/index.html
 - [S57] UE 4.24 블로그: https://www.unrealengine.com/en-US/blog/unreal-engine-4-24-released
 - [S59] Pixel Streaming 2: https://dev.epicgames.com/documentation/en-us/unreal-engine/pixel-streaming-2-overview-in-unreal-engine
+- [S60] Cinemachine 3.0 Third Person Follow 매뉴얼: https://docs.unity3d.com/Packages/com.unity.cinemachine@3.0/manual/CinemachineThirdPersonFollow.html
+- [S61] Cinemachine 3.0 변경 기록(CinemachineCollider → CinemachineDeoccluder, 3rdPersonFollow → ThirdPersonFollow): https://docs.unity3d.com/Packages/com.unity.cinemachine@3.0/changelog/CHANGELOG.html
 - [H1] Alone in the Dark (1992): https://en.wikipedia.org/wiki/Alone_in_the_Dark_(1992_video_game)

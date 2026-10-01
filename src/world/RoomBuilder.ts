@@ -48,6 +48,17 @@ export class RoomBuilder implements RoomBuilderAPI {
   triggers: Trigger[] = [];
   lights: LightSpec[] = [];
   pushables: Array<{ def: PushableDef; x: number; z: number }> = [];
+  /**
+   * Wall lines the follow camera may not cross, whatever their height: room boundaries (bulwarks and the
+   * wheelhouse window band included) and doorways. Only `open` gaps let the camera through.
+   */
+  camWalls: Array<[number, number, number, number]> = [];
+  /**
+   * Un-merged stand-ins for the big static meshes (never rendered). The follow camera ray-casts these:
+   * each one is culled by its own bounding sphere, whereas a merged room mesh spans the whole room and
+   * would make every ray test every triangle.
+   */
+  camProxies: THREE.Mesh[] = [];
 
   constructor() {
     this.staticRoot.name = 'static';
@@ -151,6 +162,16 @@ export class RoomBuilder implements RoomBuilderAPI {
       cursor = b;
     }
     if (cursor < L) pieces.push([cursor, L, 0, o.h]);
+    if (o.collide !== false && y <= 0) {
+      let from = 0;
+      for (const g of gaps) {
+        if (!g.open) continue;
+        const a = Math.max(0, g.at - g.w / 2);
+        if (a > from) this.camWalls.push([x0 + ux * from, z0 + uz * from, x0 + ux * a, z0 + uz * a]);
+        from = Math.max(from, Math.min(L, g.at + g.w / 2));
+      }
+      if (from < L) this.camWalls.push([x0 + ux * from, z0 + uz * from, x1, z1]);
+    }
     for (const [a, b, yb, hh] of pieces) {
       const len = b - a;
       if (len < 1e-4) continue;
@@ -200,6 +221,15 @@ export class RoomBuilder implements RoomBuilderAPI {
         keep.push(m);
         return;
       }
+      if (!m.userData.noCam && !m.material.transparent) {
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        if ((m.geometry.boundingSphere?.radius ?? 0) * m.matrixWorld.getMaxScaleOnAxis() >= 0.45) {
+          const p = new THREE.Mesh(m.geometry, m.material);
+          p.matrixAutoUpdate = false;
+          p.matrixWorld.copy(m.matrixWorld);
+          this.camProxies.push(p);
+        }
+      }
       let g = m.geometry.clone();
       g.applyMatrix4(m.matrixWorld);
       if (g.index) g = g.toNonIndexed();
@@ -219,6 +249,7 @@ export class RoomBuilder implements RoomBuilderAPI {
       for (const g of geos) g.dispose();
       if (!merged) continue;
       const mm = new THREE.Mesh(merged, mat);
+      mm.userData.merged = true;
       mm.matrixAutoUpdate = false;
       mm.updateMatrix();
       this.staticRoot.add(mm);

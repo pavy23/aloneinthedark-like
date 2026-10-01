@@ -25,6 +25,8 @@ export class RoomInstance implements RoomInstanceAPI {
   triggers: Trigger[];
   lights: LightSpec[];
   pushables: PushState[];
+  readonly camWalls: ReadonlyArray<readonly [number, number, number, number]>;
+  readonly camProxies: ReadonlyArray<THREE.Mesh>;
   private named: Map<string, THREE.Object3D>;
 
   constructor(def: RoomDef, b: RoomBuilder) {
@@ -35,6 +37,8 @@ export class RoomInstance implements RoomInstanceAPI {
     this.triggers = b.triggers;
     this.lights = b.lights;
     this.named = b.named;
+    this.camWalls = b.camWalls;
+    this.camProxies = b.camProxies;
     this.pushables = b.pushables.map((p) => ({ def: p.def, x: p.x, z: p.z, fx: p.x, fz: p.z, t: 1 }));
     for (const p of this.pushables) this.syncPushCollider(p);
     this.nav = this.buildNav();

@@ -15,13 +15,16 @@ await page.waitForFunction(() => !!window.__btk);
 await page.waitForTimeout(2500);
 await page.screenshot({ path: 'docs/images/title.png' });
 
-const scene = async (file, room, x, z, h, flags = {}, extra) => {
-  await page.evaluate(([r, x, z, h, f]) => {
+// camera: 'follow' (the default player-centred camera) or 'fixed' (the original fixed shots).
+const scene = async (file, room, x, z, h, flags = {}, extra, camera = 'fixed') => {
+  await page.evaluate(([r, x, z, h, f, cam]) => {
     localStorage.clear();
-    window.__btk.game.state.flags = {};
+    const g = window.__btk.game;
+    g.applySettings({ ...g.settings, camera: cam, controls: cam === 'fixed' ? 'tank' : 'direct' });
+    g.state.flags = {};
     window.__btk.setFlags(f);
     return window.__btk.play(r, x, z, h);
-  }, [room, x, z, h, flags]);
+  }, [room, x, z, h, flags, camera]);
   for (let i = 0; i < 20; i++) {
     await page.evaluate(() => window.__btk.game.ui.clearMessages());
     await page.waitForTimeout(160);
@@ -29,8 +32,8 @@ const scene = async (file, room, x, z, h, flags = {}, extra) => {
   if (extra) await extra();
   await page.screenshot({ path: `docs/images/${file}.png` });
 };
-await scene('deck', 'deck', -0.6, -8.2, Math.PI * 0.9);
-await scene('corridor', 'corridor', -1.9, 0.1, -Math.PI / 2, { power: true, 'trig:corridor:lightsOnAmbush': true, 'dead:corr1': true });
+await scene('follow-corridor', 'corridor', -3.6, 0.05, Math.PI / 2, { power: true, 'trig:corridor:lightsOnAmbush': true, 'dead:corr1': true }, undefined, 'follow');
+await scene('follow-deck', 'deck', 1.2, -6.4, Math.PI * 0.94, {}, undefined, 'follow');
 await scene('engine', 'engine', -1.8, 2.7, Math.PI * 0.8);
 await scene('hold', 'hold', 2.2, 0, -Math.PI / 2, { holdSeen: true });
 await scene('dynamo', 'engine', 4.3, 1.4, Math.PI / 2, { engineSeen: true }, async () => {

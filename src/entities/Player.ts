@@ -54,6 +54,13 @@ export class Player {
   onAttackSwing: ((w: WeaponSpec) => void) | null = null;
   private deathT = 0;
   private hurtDir = 0;
+  /**
+   * 'direct': the game hands us a world-space direction each frame (screen-relative controls) and the
+   * investigator turns and walks that way. 'tank': the 1992 scheme (up = forward, left/right = rotate).
+   */
+  controlMode: 'direct' | 'tank' = 'direct';
+  intent: { x: number; z: number; mag: number; run: boolean } | null = null;
+  private moveSpeed = 0;
 
   constructor() {
     this.rig = new HumanRig({
@@ -194,7 +201,23 @@ export class Player {
     let turn = 0;
     const controllable = input && !this.frozen && !this.busyAnim && this.state !== 'reach' && this.state !== 'crouch';
 
-    if (controllable && input) {
+    if (controllable && input && this.controlMode === 'direct') {
+      const it = this.intent;
+      if (it && it.mag > 0.15) {
+        const target = Math.atan2(it.x, it.z);
+        const diff = angleDiff(this.heading, target);
+        const maxTurn = (it.run ? 9 : 11) * dt;
+        this.heading = wrapAngle(this.heading + clamp(diff, -maxTurn, maxTurn));
+        // Walk only once roughly facing the way we're asked to go (no moonwalking); pivot otherwise.
+        const rem = Math.abs(angleDiff(this.heading, target));
+        const align = rem < 0.35 ? 1 : rem > 1.6 ? 0 : 1 - (rem - 0.35) / 1.25;
+        const strength = Math.min(1, 0.4 + it.mag * 0.75); // analog sticks walk slower near the centre
+        move = (it.run ? RUN : WALK) * strength * align;
+        this.setState(move > 0.05 ? (it.run ? 'run' : 'walk') : 'turn');
+      } else {
+        this.setState('idle');
+      }
+    } else if (controllable && input) {
       if (input.isDown('left')) turn += 1;
       if (input.isDown('right')) turn -= 1;
       const run = input.running();
@@ -225,6 +248,7 @@ export class Player {
       if (t >= 1) this.setState('idle');
     }
 
+    this.moveSpeed = Math.abs(move);
     // Movement with collision.
     this.blocked = false;
     if (move !== 0) {
@@ -254,7 +278,10 @@ export class Player {
       case 'run':
       case 'back': {
         const speed = this.state === 'run' ? 2.3 : this.state === 'walk' ? 1.0 : 0.75;
-        this.phase += dt * (this.state === 'run' ? 11.5 : 7.2) * (this.state === 'back' ? -0.8 : 1);
+        // Cadence follows the actual speed (slower when an analog stick is only half pushed).
+        const nominal = this.state === 'run' ? RUN : this.state === 'walk' ? WALK : BACK;
+        const cadence = clamp(this.moveSpeed / nominal, 0.45, 1.15);
+        this.phase += dt * (this.state === 'run' ? 11.5 : 7.2) * cadence * (this.state === 'back' ? -0.8 : 1);
         pose = gaitPose(this.phase, speed, this.state === 'back');
         this.stepEvent();
         break;

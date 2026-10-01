@@ -135,9 +135,24 @@ export interface Settings {
   hints: boolean;
   textSpeed: number;
   touch: 'auto' | 'on' | 'off';
+  /** 'direct' = push where you want to go on screen (default); 'tank' = the 1992 scheme. */
+  controls: 'direct' | 'tank';
+  /** 'follow' = camera behind the investigator (default); 'fixed' = the original fixed shots. */
+  camera: 'follow' | 'fixed';
 }
 
-export const DEFAULT_SETTINGS: Settings = { res: 240, dither: true, levels: 20, volume: 0.8, music: 0.7, hints: true, textSpeed: 42, touch: 'auto' };
+export const DEFAULT_SETTINGS: Settings = {
+  res: 240,
+  dither: true,
+  levels: 20,
+  volume: 0.8,
+  music: 0.7,
+  hints: true,
+  textSpeed: 42,
+  touch: 'auto',
+  controls: 'direct',
+  camera: 'follow',
+};
 
 export function readSettings(): Settings {
   try {
@@ -150,6 +165,8 @@ export function readSettings(): Settings {
     out.volume = Math.max(0, Math.min(1, Number(out.volume)));
     out.music = Math.max(0, Math.min(1, Number(out.music)));
     if (!['auto', 'on', 'off'].includes(out.touch)) out.touch = 'auto';
+    if (out.controls !== 'direct' && out.controls !== 'tank') out.controls = 'direct';
+    if (out.camera !== 'follow' && out.camera !== 'fixed') out.camera = 'follow';
     return out;
   } catch {
     return { ...DEFAULT_SETTINGS };

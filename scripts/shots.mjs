@@ -1,4 +1,5 @@
-// Headless screenshot tour: title screen + every fixed camera of every room.
+// Headless screenshot tour: title screen + every fixed camera of every room, then the follow camera at
+// every spawn point (doorways are where a follow camera most easily ends up outside the room).
 // Usage: node scripts/shots.mjs [roomFilter]
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -23,7 +24,13 @@ await page.goto(`http://localhost:${port}/`);
 await page.waitForTimeout(1500);
 if (!filter) await page.screenshot({ path: '.shots/00-title.png' });
 
+const setCamera = (camera) =>
+  page.evaluate((camera) => {
+    const g = window.__btk.game;
+    g.applySettings({ ...g.settings, camera });
+  }, camera);
 const rooms = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold'].filter((r) => !filter || r === filter);
+await setCamera('fixed');
 for (const room of rooms) {
   await page.evaluate((r) => window.__btk.play(r), room);
   await page.waitForTimeout(300);
@@ -41,6 +48,25 @@ for (const room of rooms) {
     const info = await page.evaluate(() => window.__btk.info());
     await page.screenshot({ path: `.shots/${room}-${i}-${c.id}.png` });
     console.log(`${room}/${c.id}: player (${x.toFixed(1)},${z.toFixed(1)}) -> resolved (${info.x.toFixed(2)},${info.z.toFixed(2)}) cam=${info.cam}`);
+  }
+}
+await setCamera('follow');
+for (const room of rooms) {
+  await page.evaluate((r) => window.__btk.play(r), room);
+  await page.waitForTimeout(300);
+  const spawns = await page.evaluate(() => Object.entries(window.__btk.game.current.def.spawns));
+  for (const [id, sp] of spawns) {
+    await page.evaluate(([x, z, h]) => {
+      const b = window.__btk;
+      b.game.pl.place(x, z, h);
+      b.game.followSnap = true;
+      b.game.ui.closeAll();
+      b.release();
+    }, [sp.x, sp.z, sp.h]);
+    await page.waitForTimeout(250);
+    const reach = await page.evaluate(() => window.__btk.game.follow.reach);
+    await page.screenshot({ path: `.shots/follow-${room}-${id}.png` });
+    console.log(`${room}/${id}: follow camera ${reach.toFixed(2)} m away`);
   }
 }
 console.log(errors.length ? errors.join('\n') : 'no console errors');

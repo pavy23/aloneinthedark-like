@@ -43,6 +43,7 @@ export class TouchControls {
     mk('run', '달리기', 'run');
     mk('inv', '소지품', 'inventory', 'small');
     mk('menu', '메뉴', 'menu', 'small');
+    mk('cam', '시점', 'camera', 'small');
 
     this.pad.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -57,6 +58,7 @@ export class TouchControls {
       if (e.pointerId !== this.padId) return;
       this.padId = null;
       this.knob.style.transform = '';
+      this.input.setStick(0, 0, false);
       for (const b of ['up', 'down', 'left', 'right'] as Btn[]) this.input.setTouch(b, false);
       if (this.runFromStick) this.input.setTouch('run', false);
       this.runFromStick = false;
@@ -89,15 +91,23 @@ export class TouchControls {
       dy /= m;
     }
     this.knob.style.transform = `translate(${dx * 42}px, ${dy * 42}px)`;
+    // Analog vector for screen-relative movement (screen up = into the scene)...
+    this.input.setStick(dx, -dy, true);
+    // ...and digital directions for tank controls and menu navigation.
     this.input.setTouch('up', dy < -0.35);
     this.input.setTouch('down', dy > 0.45);
     this.input.setTouch('left', dx < -0.4);
     this.input.setTouch('right', dx > 0.4);
-    const run = dy < -0.92;
+    const run = Math.hypot(dx, dy) > 0.95;
     if (run !== this.runFromStick) {
       this.runFromStick = run;
       this.input.setTouch('run', run);
     }
+  }
+
+  /** The "put the camera behind me" button only means something with the follow camera. */
+  showCameraButton(on: boolean): void {
+    this.buttons.cam.style.display = on ? '' : 'none';
   }
 
   /** Hide the controls temporarily (title screen, cutscenes) without changing the layout. */
@@ -140,6 +150,7 @@ export class TouchControls {
       place(this.buttons.run, W - inset - 64 - 8, midY + 40);
       place(this.buttons.inv, W - inset - 48 - 60, areaTop + 14);
       place(this.buttons.menu, W - inset - 48, areaTop + 14);
+      place(this.buttons.cam, W - inset - 48 - 120, areaTop + 14);
     } else {
       place(this.pad, inset + 8, bottom - padSize - 8);
       place(this.buttons.action, W - inset - 64 - 8, bottom - 64 - 86);
@@ -147,6 +158,7 @@ export class TouchControls {
       place(this.buttons.run, W - inset - 64 - 8, bottom - 64 - 8 + 4);
       place(this.buttons.inv, W - inset - 48 - 60, inset);
       place(this.buttons.menu, W - inset - 48, inset);
+      place(this.buttons.cam, W - inset - 48 - 120, inset);
     }
   }
 }

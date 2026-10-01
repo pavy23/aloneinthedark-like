@@ -32,18 +32,27 @@ const flagSets = [
   { power: true, 'trig:corridor:lightsOnAmbush': true, wtOpen: true },
   { power: true, 'got:idol': true, wtOpen: true, engAmbush: true },
 ];
+// Every combination of control scheme and camera gets some rooms.
+const schemes = [
+  ['direct', 'follow'],
+  ['tank', 'fixed'],
+  ['direct', 'fixed'],
+  ['tank', 'follow'],
+];
 let stuck = 0;
-for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold']) {
+for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold'].entries()) {
   const flags = flagSets[Math.floor(rnd() * flagSets.length)];
-  await page.evaluate(([r, f]) => {
+  const [controls, camera] = schemes[ri % schemes.length];
+  await page.evaluate(([r, f, controls, camera]) => {
     const b = window.__btk;
+    b.game.applySettings({ ...b.game.settings, controls, camera });
     b.game.state.flags = { ...f };
     for (const i of ['crowbar', 'axe', 'cabinKey', 'crank', 'brandy1', 'idol']) if (Math.random() < 0.5) b.give(i);
     return b.play(r);
-  }, [room, flags]);
+  }, [room, flags, controls, camera]);
   const t0 = Date.now();
   let busySince = 0;
-  const keys = ['ArrowUp', 'ArrowUp', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'Space', 'KeyF', 'ShiftLeft', 'KeyI', 'Escape'];
+  const keys = ['ArrowUp', 'ArrowUp', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'Space', 'KeyF', 'ShiftLeft', 'KeyI', 'Escape', 'KeyC'];
   while (Date.now() - t0 < seconds * 1000) {
     const k = keys[Math.floor(rnd() * keys.length)];
     const hold = 40 + Math.floor(rnd() * 500);
@@ -70,7 +79,7 @@ for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'h
     } else busySince = 0;
   }
   const s = await page.evaluate(() => window.__btk.info());
-  console.log(`${room.padEnd(9)} ok  pos=(${s.x.toFixed(1)},${s.z.toFixed(1)}) hp=${s.hp} creatures=${s.creatures.length}`);
+  console.log(`${room.padEnd(9)} ok  ${`${controls}/${camera}`.padEnd(13)} pos=(${s.x.toFixed(1)},${s.z.toFixed(1)}) hp=${s.hp} creatures=${s.creatures.length}`);
 }
 console.log(errors.length ? `ERRORS:\n${[...new Set(errors)].join('\n')}` : 'no console errors');
 console.log(stuck ? `stuck ${stuck} time(s)` : 'never stuck');

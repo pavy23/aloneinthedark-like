@@ -21,6 +21,8 @@ import { openDoc } from '../ui/DocReader';
 import { openSafePanel, openDynamoPanel, openRadioPanel } from '../ui/panels';
 import * as Screens from '../ui/screens';
 import { TouchControls } from '../ui/Touch';
+import { FollowCam } from './FollowCam';
+import { basisFromView, MoveLatch } from './controls';
 
 type Mode = 'boot' | 'title' | 'play' | 'ending';
 
@@ -64,6 +66,10 @@ export class Game implements GameAPI {
   private hintOn = true;
   private heartbeat = 0;
   private visitedCaption = new Set<string>();
+  readonly follow = new FollowCam();
+  private latch = new MoveLatch();
+  private followSnap = true;
+  private viewDir = new THREE.Vector3();
 
   constructor(app: HTMLElement) {
     this.app = app;
@@ -199,6 +205,13 @@ export class Game implements GameAPI {
     this.ui.textSpeed = s.textSpeed;
     this.hintOn = s.hints;
     this.touch.setMode(s.touch);
+    this.touch.showCameraButton(s.camera === 'follow');
+    this.pl.controlMode = s.controls;
+    this.latch.reset();
+    // A camera-mode change takes effect immediately from a clean state.
+    this.followSnap = true;
+    this.camIndex = -1;
+    if (this.mode === 'play') this.pl.object.visible = true;
     writeSettings(s);
     this.layout();
   }
@@ -253,9 +266,14 @@ export class Game implements GameAPI {
     void this.run(async () => {
       this.audio.sfx('foghorn', { volume: 0.7 });
       await this.wait(0.6);
+      const tank = this.settings.controls === 'tank';
       const how = this.touch.visible
-        ? '(왼쪽 스틱으로 회전·전진, 끝까지 밀면 달리기. "조사" 버튼으로 살펴보고, "소지품"에서 물건을 쓴다.)'
-        : '(방향키로 회전·전진, Shift 또는 ↑ 두 번으로 달리기. Space로 조사, I로 소지품, Esc로 저장·설정.)';
+        ? tank
+          ? '(왼쪽 스틱 위아래로 전진·후진, 좌우로 회전. "조사" 버튼으로 살펴보고, "소지품"에서 물건을 쓴다.)'
+          : '(왼쪽 스틱을 민 방향으로 걷는다. 끝까지 밀면 달리기. "조사" 버튼으로 살펴보고, "소지품"에서 물건을 쓴다.)'
+        : tank
+          ? '(↑↓로 전진·후진, ←→로 회전. Shift로 달리기. Space로 조사, I로 소지품, Esc로 저장·설정.)'
+          : '(방향키나 WASD를 누른 방향으로 걷는다. Shift로 달리기, C로 카메라를 등 뒤로. Space로 조사, I로 소지품, Esc로 저장·설정.)';
       await this.say('마그누스호의 보트가 안개 속으로 멀어진다. 노 젓는 소리마저 곧 삼켜졌다.', '갑판에는 아무도 없다. 선교 창문 너머로도 불빛 하나 보이지 않는다.', how);
     });
   }
@@ -317,6 +335,9 @@ export class Game implements GameAPI {
     this.renderer.setGrade(def.grade?.saturation ?? 0.82, def.grade?.tint ?? 0xfff7e6);
     this.camIndex = -1;
     this.camOverride = null;
+    this.follow.setRoom(this.current.root, this.current.camWalls, def.bounds, this.current.camProxies);
+    this.followSnap = true;
+    this.latch.reset(); // a held direction from the last room means nothing here
   }
 
   /** Build a room, place the player and kick off the room's entry script (not awaited). */
@@ -406,7 +427,12 @@ export class Game implements GameAPI {
       }
       if (inp.justPressed('attack')) {
         inp.consume('attack');
+        if (this.settings.controls === 'direct' && !this.pl.busyAnim) this.aimAtNearestCreature();
         this.pl.attack();
+      }
+      if (inp.justPressed('camera')) {
+        inp.consume('camera');
+        this.follow.recenter(this.pl.heading);
       }
       if (inp.justPressed('action') && !this.pl.busyAnim) {
         inp.consume('action');
@@ -414,6 +440,7 @@ export class Game implements GameAPI {
       }
     }
     this.pl.frozen = this.busy || this.dead;
+    this.updateMoveIntent();
     const others = this.creatures.filter((c) => c.active).map((c) => c.circle());
     this.pl.update(dt, this.busy || this.dead ? null : inp, room.col, others, this.gameTime);
     this.updatePushables(dt);
@@ -453,6 +480,26 @@ export class Game implements GameAPI {
   private updateCamera(dt: number, snap: boolean): void {
     const room = this.current;
     if (!room) return;
+    if (!this.camOverride && this.settings.camera === 'follow') {
+      if (snap || this.followSnap) {
+        this.follow.snap(this.pl.heading);
+        this.followSnap = false;
+      }
+      if (this.camera.fov !== 62) {
+        this.camera.fov = 62;
+        this.camera.updateProjectionMatrix();
+      }
+      const moving = this.pl.state === 'walk' || this.pl.state === 'run';
+      this.follow.update(this.camera, dt, this.pl.x, this.pl.z, this.pl.heading, moving);
+      if (this.shakeAmt > 0) {
+        this.camera.position.x += (noise1(this.realTime * 40, 7) - 0.5) * this.shakeAmt;
+        this.camera.position.y += (noise1(this.realTime * 40, 9) - 0.5) * this.shakeAmt;
+      }
+      // Never stare at the inside of the investigator's head when squeezed into a corner.
+      this.pl.object.visible = this.mode !== 'title' && this.follow.reach > 0.55;
+      return;
+    }
+    if (this.mode === 'play') this.pl.object.visible = true;
     let c: CameraDef;
     if (this.camOverride) {
       c = this.camOverride;
@@ -484,6 +531,38 @@ export class Game implements GameAPI {
       this.lookTarget.z = damp(this.lookTarget.z, tz, 4, dt);
     }
     this.camera.lookAt(this.lookTarget);
+  }
+
+  /** Screen-relative movement: turn the pushed direction into a world direction for the investigator. */
+  private updateMoveIntent(): void {
+    if (this.pl.controlMode !== 'direct' || this.busy || this.dead) {
+      this.pl.intent = null;
+      this.latch.reset();
+      return;
+    }
+    this.camera.getWorldDirection(this.viewDir);
+    const stick = this.input.move();
+    // An analog stick steers continuously against the live view. Keys are latched until they change
+    // (as on a fixed-camera cut): the follow camera swings round behind him while he walks, and re-reading
+    // it every frame would bend a held → into a circle.
+    const live = this.settings.camera === 'follow' && stick.analog;
+    const r = this.latch.resolve(stick, basisFromView(this.viewDir.x, this.viewDir.z, this.pl.heading), live);
+    this.pl.intent = r ? { x: r.x, z: r.z, mag: r.mag, run: this.input.running() || (stick.analog && r.mag > 0.95) } : null;
+  }
+
+  /** With screen-relative controls, swing at the closest threat instead of needing pixel-perfect facing. */
+  private aimAtNearestCreature(): void {
+    let best: Creature | null = null;
+    let bestD = 2.3;
+    for (const c of this.creatures) {
+      if (!c.active) continue;
+      const d = Math.hypot(c.x - this.pl.x, c.z - this.pl.z);
+      if (d < bestD && this.pl.angleTo(c.x, c.z) < 1.8) {
+        best = c;
+        bestD = d;
+      }
+    }
+    if (best) this.pl.face(best.x, best.z);
   }
 
   private fx(dt: number): void {
@@ -870,6 +949,7 @@ export class Game implements GameAPI {
 
   cutTo(cam: CameraDef | null): void {
     this.camOverride = cam;
+    if (!cam) this.followSnap = true;
     this.updateCamera(0, true);
   }
 

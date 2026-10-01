@@ -6,8 +6,11 @@ import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 
 // Optional: E2E_ROOT=<dir> E2E_PAGE=<file.html> to test another build (e.g. the single-file page).
+// E2E_SCHEME=tank plays with the original 1992 scheme (tank controls + fixed cameras) instead of the
+// default screen-relative controls with the follow camera.
 const root = process.env.E2E_ROOT ?? 'dist';
 const pagePath = process.env.E2E_PAGE ?? '';
+const scheme = process.env.E2E_SCHEME === 'tank' ? 'tank' : 'direct';
 const port = 4800 + Math.floor(Math.random() * 500);
 const server = spawn('node', ['scripts/serve.mjs', root, String(port)], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 400));
@@ -42,8 +45,14 @@ const shot = (name) => page.screenshot({ path: `.shots/play/${String(stepNo).pad
 
 await page.goto(`http://localhost:${port}/${pagePath}`);
 await page.waitForFunction(() => !!window.__btk);
+await page.evaluate((tank) => {
+  const g = window.__btk.game;
+  g.applySettings({ ...g.settings, controls: tank ? 'tank' : 'direct', camera: tank ? 'fixed' : 'follow' });
+}, scheme === 'tank');
+console.log(`control scheme: ${scheme}`);
 
-// In-page test driver: steers the investigator with the same virtual buttons the touch controls use.
+// In-page test driver: steers the investigator through the same inputs the touch controls use (the
+// virtual analog stick for screen-relative controls, the virtual buttons for tank controls).
 await page.evaluate(() => {
   const g = () => window.__btk.game;
   const frames = (n) =>
@@ -54,7 +63,23 @@ await page.evaluate(() => {
     });
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const ALL = ['up', 'down', 'left', 'right', 'run', 'action', 'attack', 'inventory', 'menu', 'cancel'];
-  const release = () => ALL.forEach((b) => g().input.setTouch(b, false));
+  const release = () => {
+    ALL.forEach((b) => g().input.setTouch(b, false));
+    g().input.setStick(0, 0, false);
+  };
+  const direct = () => g().pl.controlMode === 'direct';
+  // Screen-relative controls: turn a world direction into the stick deflection that means it on screen.
+  const V3 = g().camera.position.constructor;
+  const view = new V3();
+  const stickToward = (wx, wz, mag) => {
+    g().camera.getWorldDirection(view);
+    const l = Math.hypot(view.x, view.z) || 1;
+    const fx = view.x / l;
+    const fz = view.z / l;
+    const wl = Math.hypot(wx, wz) || 1;
+    // right = (-fz, fx); world = forward * y + right * x
+    g().input.setStick(((wx * -fz + wz * fx) / wl) * mag, ((wx * fx + wz * fz) / wl) * mag, true);
+  };
   const press = async (btn, hold = 3) => {
     g().input.setTouch(btn, true);
     await frames(hold);
@@ -106,6 +131,12 @@ await page.evaluate(() => {
       let diff = Math.atan2(dx, dz) - pl.heading;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       const inp = g().input;
+      if (direct()) {
+        // Full deflection runs; slow down for the last stretch so we stop on the spot.
+        stickToward(dx, dz, run && d > 2.2 ? 1 : d < 0.5 ? 0.45 : 0.85);
+        await frames(1);
+        continue;
+      }
       inp.setTouch('left', diff > 0.1);
       inp.setTouch('right', diff < -0.1);
       inp.setTouch('up', Math.abs(diff) < 0.45);
@@ -125,6 +156,12 @@ await page.evaluate(() => {
         release();
         await frames(2);
         return true;
+      }
+      if (direct()) {
+        // A light push towards it: he turns that way (and may shuffle a few centimetres).
+        stickToward(x - pl.x, z - pl.z, 0.2);
+        await frames(1);
+        continue;
       }
       g().input.setTouch('left', diff > 0);
       g().input.setTouch('right', diff < 0);

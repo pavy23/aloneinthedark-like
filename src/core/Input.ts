@@ -1,6 +1,8 @@
 // Unified input: keyboard, gamepad and on-screen touch controls all feed the same virtual buttons.
 
-export type Btn = 'up' | 'down' | 'left' | 'right' | 'run' | 'action' | 'attack' | 'inventory' | 'menu' | 'cancel';
+import type { StickInput } from '../game/controls';
+
+export type Btn = 'up' | 'down' | 'left' | 'right' | 'run' | 'action' | 'attack' | 'inventory' | 'menu' | 'cancel' | 'camera';
 
 const KEYMAP: Record<string, Btn[]> = {
   ArrowUp: ['up'],
@@ -26,9 +28,11 @@ const KEYMAP: Record<string, Btn[]> = {
   KeyP: ['menu'],
   Backspace: ['cancel'],
   KeyX: ['cancel'],
+  KeyC: ['camera'],
+  KeyQ: ['camera'],
 };
 
-const ALL: Btn[] = ['up', 'down', 'left', 'right', 'run', 'action', 'attack', 'inventory', 'menu', 'cancel'];
+const ALL: Btn[] = ['up', 'down', 'left', 'right', 'run', 'action', 'attack', 'inventory', 'menu', 'cancel', 'camera'];
 
 export class Input {
   private keys = new Set<Btn>();
@@ -47,6 +51,9 @@ export class Input {
   usingTouch = false;
   usingPad = false;
   private keyCounts = new Map<string, Btn[]>();
+  /** Analog sticks in screen space (x right, y up). */
+  private touchStick = { x: 0, y: 0, active: false };
+  private padStick = { x: 0, y: 0 };
 
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
@@ -96,16 +103,48 @@ export class Input {
 
   clearTouch(): void {
     this.touch.clear();
+    this.touchStick = { x: 0, y: 0, active: false };
+  }
+
+  /** On-screen stick position: x right, y up, each -1..1. */
+  setStick(x: number, y: number, active: boolean): void {
+    this.touchStick = { x, y, active };
+    if (active) this.usingTouch = true;
+  }
+
+  /**
+   * Where the player is pushing, in screen space. Analog sticks (touch, gamepad) win over keys; keys give
+   * eight directions at full strength.
+   */
+  move(): StickInput {
+    const t = this.touchStick;
+    if (t.active && Math.hypot(t.x, t.y) > 0.12) return { x: t.x, y: t.y, analog: true, sig: '' };
+    const p = this.padStick;
+    if (Math.hypot(p.x, p.y) > 0.22) return { x: p.x, y: p.y, analog: true, sig: '' };
+    const u = this.isDown('up') ? 1 : 0;
+    const d = this.isDown('down') ? 1 : 0;
+    const l = this.isDown('left') ? 1 : 0;
+    const r = this.isDown('right') ? 1 : 0;
+    let x = r - l;
+    let y = u - d;
+    const m = Math.hypot(x, y);
+    if (m > 1) {
+      x /= m;
+      y /= m;
+    }
+    return { x, y, analog: false, sig: `${u}${d}${l}${r}` };
   }
 
   private pollPad(): void {
     this.pad.clear();
+    this.padStick = { x: 0, y: 0 };
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
     for (const p of pads) {
       if (!p || !p.connected) continue;
       const b = (i: number) => !!p.buttons[i]?.pressed;
       const ax = p.axes[0] ?? 0;
       const ay = p.axes[1] ?? 0;
+      if (Math.hypot(ax, ay) > 0.22) this.padStick = { x: ax, y: -ay };
       if (b(12) || ay < -0.45) this.pad.add('up');
       if (b(13) || ay > 0.45) this.pad.add('down');
       if (b(14) || ax < -0.45) this.pad.add('left');
@@ -118,6 +157,7 @@ export class Input {
       if (b(2) || b(7)) this.pad.add('attack');
       if (b(3)) this.pad.add('inventory');
       if (b(9)) this.pad.add('menu');
+      if (b(5) || b(11)) this.pad.add('camera');
       if (this.pad.size > 0) this.usingPad = true;
     }
   }

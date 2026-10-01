@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A 1990s-style fixed-camera 3D exploration & puzzle horror game for the web (three.js)",
+  "description": "A 1990s-style third-person 3D exploration & puzzle horror game for the web (three.js), with a follow camera or the original fixed cameras",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
