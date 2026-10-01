@@ -4,6 +4,8 @@
 《Alone in the Dark》(1992)처럼 **3D 3인칭 시점**으로 미지의 배를 탐험하고, 문서 속 단서로 퍼즐을 풀고, 어둠 속의 무언가를 피해 살아남는 웹 게임입니다.
 기본은 **플레이어를 따라가는 카메라 + 누른 방향으로 걷는 조작**이고, 설정에서 원작의 **고정 카메라 + 탱크 조작**으로 바꿀 수 있습니다.
 
+**▶ 웹에서 바로 플레이: <https://pavy23.github.io/aloneinthedark-like/>** (GitHub Pages)
+
 - 브라우저에서 바로 실행됩니다(설치 불필요). 키보드, 게임패드, 휴대폰 터치를 모두 지원합니다.
 - 그래픽·텍스처·사운드는 **전부 코드로 생성**합니다. 이미지나 오디오 파일은 하나도 없습니다.
 - three.js + TypeScript + Vite. 게임 코드는 TypeScript 약 10,100줄 + CSS 820줄, 배포 번들은 JS 약 215 KB(gzip)입니다.
@@ -25,7 +27,7 @@ npm run build      # dist/ 에 정적 파일 생성 (어느 정적 호스팅에�
 
 Node.js 22 이상을 권장합니다. `dist/`는 상대 경로로 빌드되므로 GitHub Pages나 사내 웹서버의 하위 폴더에 그대로 올려도 동작합니다.
 
-**GitHub Pages 배포:** 저장소 Settings → Pages → Source를 "GitHub Actions"로 바꾼 뒤, Actions 탭에서 "Deploy to GitHub Pages" 워크플로를 수동 실행하면 됩니다.
+**GitHub Pages 배포:** 기본 브랜치에 push할 때마다 "Deploy to GitHub Pages" 워크플로가 타입 검사와 단위 테스트를 거쳐 빌드한 뒤 `https://<계정>.github.io/<저장소>/`에 올립니다. 처음 한 번은 저장소 Settings → Pages → Build and deployment → Source를 **GitHub Actions**로 바꿔야 합니다(그 전에는 배포 단계를 건너뜁니다). 바꾼 뒤에는 Actions 탭에서 이 워크플로를 한 번 실행(Run workflow)하거나 새로 push하면 됩니다.
 
 ## 조작
 
@@ -62,10 +64,6 @@ Node.js 22 이상을 권장합니다. `dist/`는 상대 경로로 빌드되므�
 9. 추격을 피해 기관실 **보일러 화실**에 돌을 던져 넣으면 엔딩입니다. 불 앞에는 적이 다가오지 못합니다.
 
 </details>
-
-## 웹 vs Unity 검토 요약
-
-**결론: 목표에 따라 다릅니다.** 콘셉트 검증과 링크 공유가 목적인 지금 단계에서는 웹(three.js)이 맞고, 상용 출시(스팀·콘솔, 대량 아트 에셋, 팀 협업)로 가면 Unity가 유리합니다. 가중 다기준 평가로는 프로토타입 시나리오에서 웹 3.95 대 Unity 3.83, 상용 출시 시나리오에서 웹 3.35 대 Unity 4.38이 나옵니다. 근거, 출처, 이식 경로는 **[docs/ENGINE_REVIEW.md](docs/ENGINE_REVIEW.md)** 에 정리했습니다.
 
 ## 구조
 
