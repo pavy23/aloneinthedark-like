@@ -944,7 +944,7 @@ if (run(10)) {
 
   // (f) The root with bare hands; then a reload with the root up brings the limbs back.
   await act4({ 'a4.runSet': true, 'a4.hooked': true, 'a4.raised': true, 'a4.cut': true, 'a4.buoyed': true, 'a4.pickup': true, 'a4.rootUp': true });
-  await page.evaluate(() => window.__btk.play('sbdeck', 0, 8.6, 0));
+  await page.evaluate(() => window.__btk.play('sbdeck', 0, 8.9, 0));
   await settle();
   await page.evaluate(() => window.__btk.game.clearCreatures());
   await page.evaluate(() => window.__btk.game.equip(null));

@@ -386,7 +386,8 @@ export const sbdeck: RoomDef = {
       id: 'root',
       x: ROOT_AT.x,
       z: ROOT_AT.z,
-      r: 1.95,
+      // Close enough to cut at it is inside the limbs' reach; a step back is out of it.
+      r: 1.6,
       label: '뿌리',
       enabled: (gg) => gg.flag('a4.rootUp') && !gg.flag('got:heart'),
       onAction: async (gg) => {

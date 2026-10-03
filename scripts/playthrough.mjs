@@ -1332,18 +1332,36 @@ async function playAct4(pell) {
   await clear3('the drowned on deck');
   log('deck clear, hp', (await info()).hp);
 
-  // ---- cut the heart out (the limbs strike at anyone close: drink when hurt)
-  await expect(await T('path', [[2.4, 2.0], [2.4, 5.4], [0.9, 8.3], [0, 8.6]], 0.2), 'up to the root');
-  for (let i = 0; i < 16 && (await info()).flags['got:heart'] !== true; i++) {
+  // ---- cut the heart out. The limbs reach the spot you cut from, not the step aft of it: step in to make
+  // them rear back, step out while they slam the deck, then go in and cut while they recover.
+  const OUT = 8.3;
+  const IN = 8.95;
+  await expect(await T('path', [[2.4, 2.0], [2.4, 5.4], [0.9, 7.95], [0, OUT]], 0.2), 'up to the root');
+  for (let i = 0; i < 1500 && (await info()).flags['got:heart'] !== true; i++) {
     st = await info();
-    if (st.hp <= 2 && st.inv.includes('brandy4')) {
+    if (st.mode !== 'play') break;
+    if (st.hp <= 3 && st.inv.includes('brandy4')) {
       await page.evaluate(() => void window.__btk.game.useItem('brandy4'));
       await T('skip');
+      continue;
     }
-    await T('face', 0, 10.1, 1500);
-    await T('press', 'attack');
-    await page.waitForTimeout(900);
-    await T('skip', 20);
+    const limbs = st.creatures.filter((c) => c.id.startsWith('a4limb') && c.state !== 'gone');
+    const rearing = limbs.some((c) => c.state === 'windup' || c.state === 'strike');
+    // Just after a blow: neither can rear back again for a couple of seconds.
+    const safe = limbs.every((c) => (c.state === 'recover' && c.t < 0.6) || (c.state === 'hunt' && c.t < 0.3));
+    // Both waiting to strike: stepping in now makes them rear back together (and so recover together).
+    const ready = limbs.every((c) => c.state === 'hunt' && c.t > 1.5);
+    if (rearing) await T('drive', 0, OUT, 0.1, 900, false);
+    else if (safe) {
+      await T('drive', 0, IN, 0.1, 600, false);
+      await T('face', 0, 10.4, 400);
+      await T('press', 'attack');
+      await page.waitForTimeout(950);
+      await T('skip', 6);
+      await T('drive', 0, OUT, 0.1, 900, false);
+    } else if (ready) await T('drive', 0, IN, 0.1, 600, false);
+    else if (st.z > OUT + 0.1) await T('drive', 0, OUT, 0.1, 900, false);
+    else await page.waitForTimeout(40);
   }
   await waitIdle();
   st = await info();

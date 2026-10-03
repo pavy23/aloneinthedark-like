@@ -1247,7 +1247,7 @@ export class Game implements GameAPI {
         hp: this.state.hp,
         busy: this.busy,
         ui: this.ui.anyOpen,
-        creatures: this.creatures.map((c) => ({ id: c.id, state: c.state, x: c.x, z: c.z, hp: c.hp, strength: c.strength })),
+        creatures: this.creatures.map((c) => ({ id: c.id, state: c.state, t: c.stateTime, x: c.x, z: c.z, hp: c.hp, strength: c.strength })),
         hint: this.findInteractable()?.id ?? null,
         inv: [...this.state.inv],
         flags: { ...this.state.flags },

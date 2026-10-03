@@ -179,6 +179,7 @@ export async function pickUpToTheRoot(g: GameAPI): Promise<void> {
     '쉬브 너머로 그것이 올라왔다. 케이블을 칭칭 감은 검은 덩어리. 그 둘레로 팔들이 뱃전을 붙잡는다.',
     '갑판장이 쉬브 옆에서 무언가에 끌려 뱃전 너머로 사라졌다. 비명 소리조차 없었다.',
     '덩어리 한가운데에서 검은 것이 뛴다. 탈라사호의 돌과 같은 것. 저것을 도려내 불에 넣어야 한다.',
+    '팔들은 뱃전에 뿌리를 박은 채 움직이지 않는다. 다만 닿는 데까지는 내리친다. 내리치기 전에 몸을 뒤로 젖힌다.',
   );
   spawnDeckDrowned(g, 1.5);
   await g.say('양쪽 뱃전 너머로 젖은 손들이 올라온다. 그 가운데 하나는 이등항해사의 외투를 입고 있다.');
@@ -186,12 +187,16 @@ export async function pickUpToTheRoot(g: GameAPI): Promise<void> {
 }
 
 /** Where the root lies on the fore deck once it is up, and the reach of its collider. */
-export const ROOT_AT = { x: 0, z: 10.1, r: 0.85 } as const;
+export const ROOT_AT = { x: 0, z: 10.4, r: 0.85 } as const;
 
-/** The two limbs that come over the bow with the root: they never leave it, and no blade kills them. */
+/**
+ * The two limbs that come over the bow rails with the root: they never leave it, and no blade kills them.
+ * Where you stand to cut at the root they reach you; one step aft of it they do not, so someone who
+ * watches them rear back can step out of the way and go in again.
+ */
 export function spawnRootLimbs(g: GameAPI, entrance: 'rise' | 'none'): void {
-  g.spawnCreature({ id: 'a4limb1', x: -2.2, z: 10.4, h: Math.PI, hp: 99, entrance, variant: 'limb', strength: 1, speed: 0 });
-  g.spawnCreature({ id: 'a4limb2', x: 2.3, z: 10.2, h: Math.PI, hp: 99, entrance, variant: 'limb', strength: 1, speed: 0 });
+  g.spawnCreature({ id: 'a4limb1', x: -2.4, z: 10.9, h: Math.PI, hp: 99, entrance, variant: 'limb', strength: 1, speed: 0 });
+  g.spawnCreature({ id: 'a4limb2', x: 2.5, z: 10.8, h: Math.PI, hp: 99, entrance, variant: 'limb', strength: 1, speed: 0 });
 }
 
 /** What climbs over the rail after it. One of them wears the second officer's coat. */
