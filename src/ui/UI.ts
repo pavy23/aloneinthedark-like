@@ -51,6 +51,8 @@ export class FocusNav {
   }
 
   private paint(): void {
+    // A button that has dropped out of the list (disabled since) must not keep the focus mark.
+    for (const b of this.container.querySelectorAll<HTMLElement>('[data-nav].focus')) if (!this.items.includes(b)) b.classList.remove('focus');
     this.items.forEach((b, i) => b.classList.toggle('focus', i === this.index));
     const cur = this.items[this.index];
     if (cur && typeof cur.scrollIntoView === 'function') cur.scrollIntoView({ block: 'nearest' });

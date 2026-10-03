@@ -14,7 +14,8 @@ export function openDoc(g: Game, id: string): Promise<void> {
     const next = button('뒷장 ▸', () => turn(1));
     const close = button('닫기', () => g.ui.pop(modal));
     const pager = h('div', { class: 'pager' }, prev, count, h('div', { class: 'row' }, next, close));
-    const paper = h('article', { class: `doc ${doc.style}`, role: 'document' }, h('h3', { text: doc.title }), body, pager);
+    // (Prefixed: a bare style name such as 'log' would pick up the puzzle panels' dark .log box.)
+    const paper = h('article', { class: `doc doc-${doc.style}`, role: 'document' }, h('h3', { text: doc.title }), body, pager);
     const wrap = h('div', { class: 'modal' }, paper);
     const nav = new FocusNav(pager, g.audio);
     const render = () => {
