@@ -28,7 +28,7 @@ export type RoomId =
   // Epilogue: the underwriters' committee room in London
   | 'inquiry';
 
-export type AmbienceId = 'deck' | 'interior' | 'engine' | 'hold' | 'bridge' | 'snow' | 'shore' | 'station' | 'none';
+export type AmbienceId = 'deck' | 'interior' | 'engine' | 'hold' | 'bridge' | 'snow' | 'shore' | 'station' | 'london' | 'none';
 export type Surface = 'metal' | 'wood' | 'grate' | 'lino' | 'snow' | 'shingle';
 
 export interface Spawn {

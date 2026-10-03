@@ -28,7 +28,7 @@ export const inquiry: RoomDef = {
   fog: { color: 0x0a0907, density: 0.05 },
   hemi: { sky: 0x8a8a84, ground: 0x2a2018, intensity: 1.15 },
   grade: { saturation: 0.78, tint: 0xfff4e6 },
-  ambience: 'interior',
+  ambience: 'london',
   surface: 'wood',
   bounds: rect(-5, 0, 5, 8),
   spawns: {

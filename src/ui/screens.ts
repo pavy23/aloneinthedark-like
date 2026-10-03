@@ -301,7 +301,7 @@ export async function playEnding(g: Game): Promise<void> {
 
 /** The epilogue's opening: London, June 1926. */
 export async function playInquiryIntro(g: Game, withPell: boolean): Promise<void> {
-  g.audio.setAmbience('interior');
+  g.audio.setAmbience('london');
   await story(
     g,
     '1926년 6월 14일 · 런던',

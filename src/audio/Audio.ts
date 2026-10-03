@@ -634,6 +634,13 @@ export class AudioSystem {
         this.every(bed, 6, 12, () => this.sfx('creak', { volume: 0.5 }));
         this.every(bed, 20, 40, () => this.sfx('knock3', { volume: 0.35 }));
         break;
+      case 'london':
+        // The committee room over a London street: traffic down below, the wall clock. Nothing of the sea.
+        this.loopNoise(bed, 'lowpass', 160, 0.7, 0.06, 0.07, 0.03);
+        this.loopNoise(bed, 'bandpass', 600, 0.8, 0.012, 0.11, 0.008);
+        this.drone(bed, 45, 'sine', 0.012);
+        this.every(bed, 0.95, 1.05, () => this.sfx('tick', { volume: 0.4 }));
+        break;
       case 'hold':
         this.loopNoise(bed, 'bandpass', 320, 1.5, 0.08, 0.35, 0.06);
         this.drone(bed, 36.7, 'sine', 0.07);
