@@ -89,13 +89,11 @@ export const CORE_OHMS_PER_NM = 3.9;
 export const SHORE_END_NM = 1037;
 
 /**
- * Where the thing is on its cable (nautical miles below the bow), `seconds` of play after it started to
- * climb: about half a mile an hour, slow enough to balance the bridge on (one step of the finest arms takes
- * it ~17 s) and fast enough to show between two readings a minute apart. It never quite arrives.
+ * Where the break on the thing's cable is (nautical miles below the bow) when the investigator measures it:
+ * a tenth of a mile nearer than Bale's last reading (2.2). It holds still while it is measured, so the
+ * bridge has one answer: 8.19 Ω, 0819 on the 10 : 1000 arms.
  */
-export function thingDistance(seconds: number): number {
-  return Math.max(0.3, 2.1 - 0.00015 * Math.max(0, seconds));
-}
+export const THING_NM = 2.1;
 
 /**
  * For a "dead earth" (a clean break with the copper in the sea) the conductor resistance up to the break is

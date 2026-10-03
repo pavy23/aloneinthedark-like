@@ -734,11 +734,8 @@ await page.waitForSelector('#modal .galvo-scale', { timeout: 6000 });
 // still has to work the real dials, ratio arms and shunt).
 const truth = (side) =>
   page.evaluate((side) => {
-    const g = window.__btk.game;
-    const f = g.state.flags;
-    const climbing = (f['a2.thingStbd'] ? 'stbd' : 'port') === side;
-    const nm = climbing ? Math.max(0.3, 2.1 - 0.00015 * Math.max(0, g.playTime - f['a2.t0'])) : 1037;
-    return 3.9 * nm;
+    const f = window.__btk.game.state.flags;
+    return 3.9 * ((f['a2.thingStbd'] ? 'stbd' : 'port') === side ? 2.1 : 1037);
   }, side);
 const panelText = (sel) => page.locator(`#modal ${sel}`).first().innerText();
 const cycleTo = async (btnText, want) => {
@@ -776,18 +773,13 @@ const otherSide = thingSide === 'port' ? 'stbd' : 'port';
 let rec = await measure(thingSide);
 log(`${thingSide} end:`, rec.split('\n')[0]);
 await expect(rec.includes('고장점까지') && rec.includes('해리'), 'dead earth a couple of miles out on the thing’s cable');
+await expect((await flag('a2.measured')) !== true, 'one end is not enough');
 rec = await measure(otherSide);
 log(`${otherSide} end:`, rec.split('\n')[0]);
 await expect(rec.includes('육지국'), 'the other end runs sound to the shore station');
-await expect((await flag('a2.measured')) !== true, 'one reading of each end is not enough');
+await expect((await flag('a2.measured')) === true, 'both ends read: measurement concluded');
+await expect(rec.includes(`${KO[thingSide]} 케이블에 붙어`), 'the panel names the right cable');
 await shot('bridge-panel');
-log('waiting for the fault to move...');
-await page.waitForTimeout(40000);
-rec = await measure(thingSide);
-log(`${thingSide} end again:`, rec.split('\n').slice(0, 2).join(' / '));
-await expect(rec.includes('줄었다'), 'the fault has moved towards the ship');
-await expect((await flag('a2.measured')) === true, 'measurement concluded');
-await expect(rec.includes(`${KO[thingSide]} 케이블을 타고`), 'the panel names the right cable');
 await clickBtn('물러나기');
 const concl = await T('skip', 200);
 await expect(concl.some((l) => l.includes(`${KO[thingSide]} 드럼을 놓아`)), 'conclusion narrated');
@@ -1052,11 +1044,8 @@ async function playAct3(pell) {
   await expect((await info()).flags['a3.handle'] === true && (await info()).flags['sw.condenser'] === false && (await info()).flags['sw.bridge'] === true, 'handle fitted; condenser bypassed, bridge on');
   await actAt([[-0.6, 3.9], [-1.4, 1.35]], -1.4, 0.45, 'walk to the bridge');
   await openedPanel('.galvo-scale');
-  const truth3 = () =>
-    page.evaluate(() => {
-      const g = window.__btk.game;
-      return 3.9 * Math.max(0.12, 0.34 - 0.00008 * Math.max(0, g.playTime - g.state.flags['a3.t0']));
-    });
+  // The shore-section fault: 0.341 nmi of line, 1.33 Ω.
+  const truth3 = async () => 3.9 * 0.341;
   const cycle3 = async (btnText, want) => {
     for (let i = 0; i < 5; i++) {
       const b = page.locator('#modal .btn', { hasText: btnText }).first();

@@ -30,30 +30,7 @@ export class AudioSystem {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AC) return;
       this.ctx = new AC();
-      const c = this.ctx;
-      this.master = c.createGain();
-      this.master.gain.value = this.volume;
-      this.master.connect(c.destination);
-      this.sfxBus = c.createGain();
-      this.ambBus = c.createGain();
-      this.musicBus = c.createGain();
-      this.musicBus.gain.value = this.musicVolume;
-      this.sfxBus.connect(this.master);
-      this.ambBus.connect(this.master);
-      this.musicBus.connect(this.master);
-      // Metallic hull reverb from a generated impulse response.
-      const verb = c.createConvolver();
-      verb.buffer = this.impulse(2.6, 2.2);
-      this.verbIn = c.createGain();
-      this.verbIn.gain.value = 0.35;
-      const verbOut = c.createGain();
-      verbOut.gain.value = 0.9;
-      this.verbIn.connect(verb);
-      verb.connect(verbOut);
-      verbOut.connect(this.master);
-      this.noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
-      const d = this.noise.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this.wire();
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     if (this.pendingBed) {
@@ -61,6 +38,52 @@ export class AudioSystem {
       this.pendingBed = null;
       this.setAmbience(id);
     }
+  }
+
+  /** The buses and the hull reverb on the current context. */
+  private wire(): void {
+    const c = this.ctx!;
+    this.master = c.createGain();
+    this.master.gain.value = this.volume;
+    this.master.connect(c.destination);
+    this.sfxBus = c.createGain();
+    this.ambBus = c.createGain();
+    this.musicBus = c.createGain();
+    this.musicBus.gain.value = this.musicVolume;
+    this.sfxBus.connect(this.master);
+    this.ambBus.connect(this.master);
+    this.musicBus.connect(this.master);
+    // Metallic hull reverb from a generated impulse response.
+    const verb = c.createConvolver();
+    verb.buffer = this.impulse(2.6, 2.2);
+    this.verbIn = c.createGain();
+    this.verbIn.gain.value = 0.35;
+    const verbOut = c.createGain();
+    verbOut.gain.value = 0.9;
+    this.verbIn.connect(verb);
+    verb.connect(verbOut);
+    verbOut.connect(this.master);
+    this.noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const d = this.noise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+
+  /**
+   * Render one effect on its own into a buffer instead of the speakers (to measure a sound, or to listen to
+   * it in isolation). The live context, if any, is left as it was.
+   */
+  async renderSfx(name: string, seconds: number, opts: { volume?: number } = {}, rate = 44100): Promise<AudioBuffer> {
+    const keep = { ctx: this.ctx, master: this.master, sfxBus: this.sfxBus, ambBus: this.ambBus, musicBus: this.musicBus, verbIn: this.verbIn, noise: this.noise };
+    const off = new OfflineAudioContext(2, Math.ceil(seconds * rate), rate);
+    // Only the BaseAudioContext half of the interface is used to build an effect.
+    this.ctx = off as unknown as AudioContext;
+    try {
+      this.wire();
+      this.sfx(name, opts);
+    } finally {
+      Object.assign(this, keep);
+    }
+    return off.startRendering();
   }
 
   /** Pause all sound while the page is hidden (the game loop stops too). */
@@ -406,9 +429,19 @@ export class AudioSystem {
         this.tone(t, 55, 3.4, 'sawtooth', 0.08 * v, 0.6, 140, 0.4);
         this.tone(t + 0.4, 110, 3.0, 'sawtooth', 0.04 * v, 0.6, 260, 0.4);
         break;
-      case 'drip':
-        this.tone(t, 1600 + Math.random() * 900, 0.12, 'sine', 0.04 * v, 0.8, 700);
+      case 'drip': {
+        // A drop into standing water: a faint tick as it lands, then the "plink" of the air bubble it traps.
+        // The plink's pitch rises as the bubble nears the surface; falling, it sounded like a game blip.
+        const f0 = 900 + Math.random() * 900;
+        this.burst(t, 0.006, 'highpass', 2500, 0.7, 0.012 * v, 0.6, 0.0005);
+        this.tone(t + 0.006, f0, 0.075 + Math.random() * 0.04, 'sine', 0.045 * v, 0.7, f0 * (1.6 + Math.random() * 0.5), 0.002);
+        // Now and then a second, smaller bubble.
+        if (Math.random() < 0.3) {
+          const f1 = f0 * (1.2 + Math.random() * 0.4);
+          this.tone(t + 0.07 + Math.random() * 0.06, f1, 0.05, 'sine', 0.016 * v, 0.7, f1 * 1.7, 0.002);
+        }
         break;
+      }
       case 'creak':
         this.tone(t, 60 + Math.random() * 40, 0.9 + Math.random() * 0.6, 'sawtooth', 0.025 * v, 0.7, 45 + Math.random() * 60, 0.3);
         break;

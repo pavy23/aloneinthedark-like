@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CORE_OHMS_PER_NM,
+  SHORE_END_NM,
   TANK2_DRAINED,
+  THING_NM,
   bridgeReading,
   cableAction,
   decadeValue,
@@ -8,7 +11,6 @@ import {
   balanceVerdict,
   finestRatio,
   galvanometerSpot,
-  thingDistance,
   isEcho,
   knockReply,
   newCableEngine,
@@ -64,24 +66,19 @@ describe('Wheatstone bridge', () => {
     expect(balanceVerdict(4044.3, 4044, 1, 1)).toBe('balanced');
   });
 
-  it('can always be balanced, however far the thing has climbed', () => {
-    // The nearest setting of the finest arms is never more than half a step off: it must always count.
-    for (let s = 0; s <= 6 * 3600; s += 7) {
-      const t = 3.9 * thingDistance(s);
-      const r = finestRatio(t)!;
-      const nearest = Math.round(t / r) * r;
-      expect(balanceVerdict(t, nearest, r, 1)).toBe('balanced');
-    }
-  });
-
-  it('shows the climb between two readings a minute apart', () => {
-    const a = 3.9 * thingDistance(600);
-    const b = 3.9 * thingDistance(660);
-    // At least two steps of the finest (×0.01) arms.
-    expect(a - b).toBeGreaterThan(0.02);
-    // ...but slow enough to balance on: under one step per 10 s.
-    expect(3.9 * (thingDistance(0) - thingDistance(10))).toBeLessThan(0.01);
-    expect(thingDistance(1e9)).toBeGreaterThan(0.25);
+  it('has one answer for each end: 0819 on 10 : 1000 and 4044 on 1000 : 1000', () => {
+    // The broken end, where the thing holds the cable: 2.1 nmi of core, 8.19 Ω.
+    const thing = CORE_OHMS_PER_NM * THING_NM;
+    expect(finestRatio(thing)).toBe(0.01);
+    expect(balanceVerdict(thing, bridgeReading([0, 8, 1, 9], 0.01), 0.01, 1)).toBe('balanced');
+    // A step either side still counts; three steps off does not.
+    expect(balanceVerdict(thing, bridgeReading([0, 8, 2, 0], 0.01), 0.01, 1)).toBe('balanced');
+    expect(balanceVerdict(thing, bridgeReading([0, 8, 1, 6], 0.01), 0.01, 1)).toBe('off');
+    // The sound end, through to the shore station's instruments.
+    const shore = CORE_OHMS_PER_NM * SHORE_END_NM;
+    expect(finestRatio(shore)).toBe(1);
+    expect(balanceVerdict(shore, bridgeReading([4, 0, 4, 4], 1), 1, 1)).toBe('balanced');
+    expect(faultDistance(bridgeReading([0, 8, 1, 9], 0.01), CORE_OHMS_PER_NM)).toBeCloseTo(2.1, 9);
   });
 
   it('turns the conductor resistance up to a dead earth into a distance', () => {

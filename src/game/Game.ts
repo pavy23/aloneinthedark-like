@@ -1258,6 +1258,11 @@ export class Game implements GameAPI {
         this.updateCamera(0, true);
       },
       startChapter: (act: number, pell = false) => this.startChapter(act, pell),
+      /** One sound effect rendered offline: both channels' samples (for measuring and listening to it). */
+      renderSfx: async (name: string, seconds = 1.5, volume = 1) => {
+        const b = await this.audio.renderSfx(name, seconds, { volume });
+        return { rate: b.sampleRate, channels: [Array.from(b.getChannelData(0)), Array.from(b.getChannelData(1))] };
+      },
       /** Specific gravities of the third act's sixteen cells (for tests). */
       rack: () => rackSgs(this),
       setFlags: (f: Record<string, boolean | number>) => {

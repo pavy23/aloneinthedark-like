@@ -34,14 +34,14 @@ const rooms = ALL_ROOMS.filter((r) => !filter || filter.split(',').includes(r));
 // ACT=2 shows every room as it is in the second act (power on, the stone burned, tank No.2 drained).
 if (process.env.ACT === '2')
   await page.evaluate(() =>
-    window.__btk.setFlags({ power: true, idolBurned: true, act2: true, 'a2.t0': 0, tank2Drained: true, tank2Open: true, 'vc.level': 0 }),
+    window.__btk.setFlags({ power: true, idolBurned: true, act2: true, tank2Drained: true, tank2Open: true, 'vc.level': 0 }),
   );
 // ACT=3 (PELL=1 for the operator's version): Bell Cove as found.
 if (process.env.ACT === '3')
   await page.evaluate((pell) => {
     const b = window.__btk;
     b.game.state.flags = {};
-    b.setFlags({ act3: true, 'a3.pell': pell, 'a3.t0': 0, 'a3.seed': 1234, 'a3.combo': 472, 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true });
+    b.setFlags({ act3: true, 'a3.pell': pell, 'a3.seed': 1234, 'a3.combo': 472, 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true });
   }, process.env.PELL === '1');
 // ACT=4 (STAGE=root for the finale, with the root up over the bow): the St Brendan.
 if (process.env.ACT === '4')

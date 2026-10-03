@@ -7,6 +7,7 @@ import {
   CANDLE_SECONDS,
   CELLS_NEEDED,
   HUT_NM,
+  LANDFALL_NM,
   TAPE_UNITS,
   bridgeView,
   decodeCable,
@@ -25,7 +26,6 @@ import {
   cellsInString,
   cellsRead,
   coilWait,
-  faultNow,
   getSwitchboard,
   markRead,
   rackSgs,
@@ -536,7 +536,7 @@ const RATIO_ARMS = ['10 : 1000', '100 : 1000', '1000 : 1000'];
 /** What the bridge sees on its unknown arm: the cable to the fault, or (condenser in, test link out) nothing. */
 function lineOhms(g: Game): number {
   const v = bridgeView(getSwitchboard(g));
-  return v === 'line' ? CORE_OHMS_PER_NM * faultNow(g) : Infinity;
+  return v === 'line' ? CORE_OHMS_PER_NM * LANDFALL_NM : Infinity;
 }
 
 export function openBridge3Panel(g: Game): Promise<void> {
@@ -617,13 +617,8 @@ export function openBridge3Panel(g: Game): Promise<void> {
       }
       g.audio.sfx('ui-ok');
       const d = faultDistance(r, CORE_OHMS_PER_NM);
-      const prev = g.num('a3.recLast');
-      const n = g.num('a3.recN');
-      g.setFlag('a3.recN', n + 1);
-      g.setFlag('a3.recLast', d);
       const beyond = Math.max(0, (d - HUT_NM) * 1852);
       log.textContent = `균형 — ${r.toFixed(2)} Ω. 고장점까지 ${d.toFixed(3)}해리.\n오두막까지가 ${HUT_NM.toFixed(3)}해리이니, 오두막에서 바다 쪽으로 ${Math.round(beyond / 10) * 10}미터 남짓. 해안 구간이다.`;
-      if (n > 0 && d < prev - 0.0005) log.textContent += '\n…방금 전보다 줄었다. 다가온다.';
       if (!g.flag('a3.measured')) {
         g.setFlag('a3.measured');
         g.audio.sfx('stinger', { volume: 0.5 });

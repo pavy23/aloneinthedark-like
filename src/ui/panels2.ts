@@ -6,6 +6,7 @@ import {
   CORE_OHMS_PER_NM,
   SHORE_END_NM,
   SHUNTS,
+  THING_NM,
   balanceVerdict,
   bridgeReading,
   cableAction,
@@ -17,7 +18,7 @@ import {
   type Side,
   type ValveChest,
 } from '../game/logic2';
-import { SIDE_KO, cableRunOut, getCableEngine, getValves, setCableEngine, setValves, tankLevel, thingNow, thingSide } from '../game/act2';
+import { SIDE_KO, cableRunOut, getCableEngine, getValves, setCableEngine, setValves, tankLevel, thingSide } from '../game/act2';
 
 const fmtOhm = (r: number) => (r < 100 ? r.toFixed(2) : r.toLocaleString('en-US', { maximumFractionDigits: 0 }));
 const fmtNm = (d: number) => (d < 100 ? d.toFixed(3) : d.toLocaleString('en-US', { maximumFractionDigits: 0 }));
@@ -27,9 +28,9 @@ const fmtNm = (d: number) => (d < 100 ? d.toFixed(3) : d.toLocaleString('en-US',
 /** Ratio arms Q/P of the bridge for each multiplier. */
 const RATIO_ARMS = ['10 : 1000', '100 : 1000', '1000 : 1000'];
 
-/** True resistance on a lead right now: the thing's dead earth climbing, or the sound end to the shore station. */
+/** True resistance on a lead: the dead earth where the thing holds its cable, or the sound end to the shore station. */
 function leadOhms(g: Game, side: Side): number {
-  return CORE_OHMS_PER_NM * (thingSide(g) === side ? thingNow(g) : SHORE_END_NM);
+  return CORE_OHMS_PER_NM * (thingSide(g) === side ? THING_NM : SHORE_END_NM);
 }
 
 export function openBridgePanel(g: Game): Promise<void> {
@@ -96,12 +97,8 @@ export function openBridgePanel(g: Game): Promise<void> {
     const paintRecs = () => {
       const lines: string[] = [];
       for (const s of ['port', 'stbd'] as Side[]) {
-        const n = g.num(`a2.rec.${s}.n`);
-        if (!n) continue;
-        const first = g.num(`a2.rec.${s}.first`);
-        const last = g.num(`a2.rec.${s}.last`);
-        const tag = s === 'port' ? 'B 좌현' : 'C 우현';
-        lines.push(n > 1 && last !== first ? `${tag}: ${fmtNm(first)} → ${fmtNm(last)} 해리` : `${tag}: ${fmtNm(last)} 해리`);
+        if (!g.num(`a2.rec.${s}.n`)) continue;
+        lines.push(`${s === 'port' ? 'B 좌현' : 'C 우현'}: ${fmtNm(g.num(`a2.rec.${s}.last`))} 해리`);
       }
       recs.textContent = lines.length ? `측정 기록\n${lines.join('\n')}` : '측정 기록 없음';
     };
@@ -123,25 +120,19 @@ export function openBridgePanel(g: Game): Promise<void> {
       }
       g.audio.sfx('ui-ok');
       const d = faultDistance(r, CORE_OHMS_PER_NM);
-      const n = g.num(`a2.rec.${side}.n`);
-      const prev = g.num(`a2.rec.${side}.last`);
-      g.setFlag(`a2.rec.${side}.n`, n + 1);
-      if (!n) g.setFlag(`a2.rec.${side}.first`, d);
+      g.setFlag(`a2.rec.${side}.n`, g.num(`a2.rec.${side}.n`) + 1);
       g.setFlag(`a2.rec.${side}.last`, d);
       const tag = side === 'port' ? 'B(좌현)' : 'C(우현)';
-      if (d > 500) {
-        log.textContent = `${tag} 균형 — ${fmtOhm(r)} Ω, ${fmtNm(d)}해리. 육지국까지 이어진 건전한 케이블이다. 끝에서 접지된 계기까지의 저항일 뿐.`;
-      } else if (n && Math.abs(d - prev) > 0.001) {
-        log.textContent = `${tag} 균형 — ${fmtOhm(r)} Ω, ${fmtNm(d)}해리.\n${d < prev ? '…방금 전보다 줄었다. 고장점이 배 쪽으로 다가온다.' : '…방금 전과 다르다. 고장점이 움직이고 있다.'}`;
-        g.setFlag('a2.moving', true);
-      } else {
-        log.textContent = `${tag} 균형 — ${fmtOhm(r)} Ω, 고장점까지 ${fmtNm(d)}해리. 완전 단선: 심선이 그 자리에서 바다에 닿아 있다.`;
-      }
+      log.textContent =
+        d > 500
+          ? `${tag} 균형 — ${fmtOhm(r)} Ω, ${fmtNm(d)}해리. 육지국까지 이어진 건전한 케이블이다. 끝에서 접지된 계기까지의 저항일 뿐.`
+          : `${tag} 균형 — ${fmtOhm(r)} Ω, 고장점까지 ${fmtNm(d)}해리. 완전 단선: 심선이 그 자리에서 바다에 닿아 있다.`;
+      // Both ends read: the one that breaks off a couple of miles out is the one the thing is holding.
       const other: Side = side === 'port' ? 'stbd' : 'port';
-      if (!g.flag('a2.measured') && g.flag('a2.moving') && g.num(`a2.rec.${other}.n`) > 0) {
+      if (!g.flag('a2.measured') && g.num(`a2.rec.${other}.n`) > 0) {
         g.setFlag('a2.measured');
         const ts = thingSide(g);
-        log.textContent += `\n\n두 끝을 다 쟀다. 고장점이 움직이는 것은 ${ts === 'port' ? 'B — 좌현' : 'C — 우현'} 끝이다. 그것은 ${SIDE_KO[ts]} 케이블을 타고 올라오고 있다.`;
+        log.textContent += `\n\n두 끝을 다 쟀다. 끊긴 것은 ${ts === 'port' ? 'B — 좌현' : 'C — 우현'} 끝이다. 베일의 마지막 기록(2.2해리)보다 배에 가깝다. 그것은 ${SIDE_KO[ts]} 케이블에 붙어 올라오고 있다.`;
         g.audio.sfx('stinger', { volume: 0.5 });
       }
       paint();

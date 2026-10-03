@@ -112,7 +112,7 @@ async function talkPell(g: GameAPI): Promise<void> {
     );
     return;
   }
-  await g.say('"시험실은 사관 통로에 있소. 좌현 끝, 우현 끝 — 둘 다 재 보시오. 고장점이 움직이는 쪽이 놈이오."');
+  await g.say('"시험실은 사관 통로에 있소. 좌현 끝, 우현 끝 — 둘 다 재 보시오. 천 해리 넘게 육지국까지 이어진 쪽은 멀쩡한 거요. 몇 해리 앞에서 끊긴 쪽, 거기에 놈이 붙어 있소."');
 }
 
 async function mimicOut(g: GameAPI, side: Side): Promise<void> {

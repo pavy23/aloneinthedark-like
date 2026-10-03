@@ -60,7 +60,7 @@ export function landfallState(pell: boolean, prev?: GameState): GameState {
   s.hp = MAX_HP;
   s.inv = ['lantern', 'telegram'];
   s.equipped = null;
-  s.flags = act3Flags(pell, s.time);
+  s.flags = act3Flags(pell);
   return s;
 }
 

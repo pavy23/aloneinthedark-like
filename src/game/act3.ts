@@ -3,7 +3,6 @@ import {
   CELLS_NEEDED,
   COIL_RECHARGE,
   fireResult,
-  landfallDistance,
   rackGravities,
   stringStatus,
   switchboardAsFound,
@@ -30,11 +29,10 @@ export const SWITCH_LABEL: Record<SwitchKey, string> = {
  * Flags that open the third act. The rack's cells and the store's number are decided per playthrough.
  * Everything from the first two acts is left behind except whether Pell came off the ship with you.
  */
-export function act3Flags(pell: boolean, time: number, rnd: () => number = Math.random): Record<string, boolean | number> {
+export function act3Flags(pell: boolean, rnd: () => number = Math.random): Record<string, boolean | number> {
   const f: Record<string, boolean | number> = {
     act3: true,
     'a3.pell': pell,
-    'a3.t0': time,
     'a3.seed': 1 + Math.floor(rnd() * 2147483000),
     'a3.combo': Math.floor(rnd() * 1000),
   };
@@ -89,11 +87,6 @@ export function markRead(g: GameAPI, i: number): void {
 
 export function battery(g: Flags): StringStatus {
   return stringStatus(cellsInString(g), rackSgs(g));
-}
-
-/** Where the fault is now (nautical miles of line from the switchboard). */
-export function faultNow(g: Pick<GameAPI, 'num' | 'playTime'>): number {
-  return landfallDistance(g.playTime - g.num('a3.t0'));
 }
 
 /** Seconds until the coil can fire again (0 = ready). */

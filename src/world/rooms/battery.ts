@@ -243,7 +243,7 @@ export const battery: RoomDef = {
         if (gg.flag('a3.measured') && !gg.flag('a3.measuredSaid')) {
           gg.setFlag('a3.measuredSaid');
           await gg.say(
-            '고장점은 오두막 너머, 바다 쪽으로 몇백 미터. 해안 구간이다. 재는 동안에도 다가왔다.',
+            '고장점은 오두막 너머, 바다 쪽으로 450미터 남짓. 해안 구간이다. 소장의 일지대로라면, 지난달에는 아직 수백 해리 밖이었다.',
             '소장의 계획대로라면 — 지금이다. 그것이 오두막 앞까지 올라왔을 때 코일을 쏘아야 한다.',
           );
         }

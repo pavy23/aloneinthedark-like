@@ -48,7 +48,7 @@ await scene('dynamo', 'engine', 4.3, 1.4, Math.PI / 2, { engineSeen: true }, asy
   await page.waitForTimeout(400);
 });
 // The second act.
-const act2 = { power: true, idolBurned: true, act2: true, 'a2.t0': 0, 'dead:a2fc1': true, 'dead:a2fc2': true };
+const act2 = { power: true, idolBurned: true, act2: true, 'dead:a2fc1': true, 'dead:a2fc2': true };
 await scene('fcsle', 'fcsle', 0.4, 4.4, -1.25, { ...act2, fcsleSeen: true, pellFreed: true, 'a2.pellStbd': false, 'a2.door.port': true }, async () => {
   // A hand-placed shot so that the operator by his locker door is not hidden behind the investigator.
   await page.evaluate(() => window.__btk.game.cutTo({ id: 'x', pos: [1.6, 1.85, 2.3], look: [-1.5, 0.75, 5.4], fov: 60, zones: [] }));
@@ -57,11 +57,10 @@ await scene('fcsle', 'fcsle', 0.4, 4.4, -1.25, { ...act2, fcsleSeen: true, pellF
 await page.setViewportSize({ width: 960, height: 720 }); // room for the docked panel and the instruments
 await scene('bridge', 'testroom', -0.2, 2.3, 0, {
   ...act2, testroomSeen: true, 'a2.bridgeIntro': true, 'a2.thingStbd': true, 'a2.leadStbd': true, 'a2.ratio': 0, 'a2.shuntSet': 3,
-  'a2.d0': 0, 'a2.d1': 8, 'a2.d2': 1, 'a2.d3': 9, 'a2.rec.stbd.n': 2, 'a2.rec.stbd.first': 2.1, 'a2.rec.stbd.last': 2.1, 'a2.rec.port.n': 1, 'a2.rec.port.first': 1037, 'a2.rec.port.last': 1037,
+  'a2.d0': 0, 'a2.d1': 8, 'a2.d2': 1, 'a2.d3': 9, 'a2.rec.stbd.n': 1, 'a2.rec.stbd.last': 2.1, 'a2.rec.port.n': 1, 'a2.rec.port.last': 1037,
 }, async () => {
   await page.evaluate(() => {
     const g = window.__btk.game;
-    g.state.time = g.state.flags['a2.t0'];
     g.cutTo({ id: 'x', pos: [-0.9, 1.75, 2.15], look: [0.35, 0.85, 3.15], fov: 52, zones: [], hidePlayer: true });
     void g.openPanel('bridge');
   });
@@ -73,7 +72,7 @@ await scene('tank2', 'tank2', 2.55, -0.55, -Math.PI / 2 - 0.25, { ...act2, tank2
   await page.waitForTimeout(2600);
 }, 'follow');
 // The third act.
-const act3 = { act3: true, 'a3.pell': true, 'a3.t0': 0, 'a3.seed': 1234, 'a3.combo': 472, 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true, 'a3.arrived': true, 'a3.opsSeen': true, 'a3.beachSeen': true, 'a3.limbSeen': true };
+const act3 = { act3: true, 'a3.pell': true, 'a3.seed': 1234, 'a3.combo': 472, 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true, 'a3.arrived': true, 'a3.opsSeen': true, 'a3.beachSeen': true, 'a3.limbSeen': true };
 await scene('station', 'station', 0.6, -3.6, 0.12, act3, undefined, 'follow');
 await page.setViewportSize({ width: 960, height: 720 });
 await scene('tape', 'opsroom', 0.6, 4.4, 0, { ...act3, 'a3.tapeSeen': true, 'a3.clerkUp': true, 'dead:a3clerk': true, 'a3.tapeMemo': true }, async () => {

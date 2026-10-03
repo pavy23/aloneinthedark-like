@@ -12,7 +12,7 @@ import {
   nightTape,
   storeMessage,
   tryCombo,
-  landfallDistance,
+  LANDFALL_NM,
   layoutTape,
   mirrorCode,
   mirrorDigit,
@@ -23,6 +23,7 @@ import {
   switchboardAsFound,
   type Switchboard,
 } from '../src/game/logic3';
+import { CORE_OHMS_PER_NM, balanceVerdict, bridgeReading, faultDistance, finestRatio } from '../src/game/logic2';
 
 describe('cable code on the siphon recorder', () => {
   it('encodes letters and numerals, and reads them back off the tape', () => {
@@ -126,10 +127,15 @@ describe('the line switchboard', () => {
 });
 
 describe('landfall', () => {
-  it('closes on the shore but never quite arrives', () => {
-    expect(landfallDistance(0)).toBeCloseTo(0.34, 6);
-    expect(landfallDistance(600)).toBeLessThan(landfallDistance(0));
-    expect(landfallDistance(1e9)).toBeGreaterThan(HUT_NM);
+  it('has one answer on the bridge: 0133 on 10 : 1000, some 450 m beyond the hut', () => {
+    const ohms = CORE_OHMS_PER_NM * LANDFALL_NM;
+    expect(finestRatio(ohms)).toBe(0.01);
+    expect(balanceVerdict(ohms, bridgeReading([0, 1, 3, 3], 0.01), 0.01, 1)).toBe('balanced');
+    expect(balanceVerdict(ohms, bridgeReading([0, 1, 3, 2], 0.01), 0.01, 1)).toBe('off');
+    expect(balanceVerdict(ohms, bridgeReading([0, 1, 3, 4], 0.01), 0.01, 1)).toBe('off');
+    const beyond = (faultDistance(1.33, CORE_OHMS_PER_NM) - HUT_NM) * 1852;
+    expect(beyond).toBeGreaterThan(400);
+    expect(beyond).toBeLessThan(500);
   });
 
   it('fires only for whoever answers K with R', () => {

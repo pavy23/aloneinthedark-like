@@ -1,16 +1,14 @@
 import type { GameAPI } from '../world/types';
-import { TANK2_DRAINED, newCableEngine, newValveChest, stepTankLevel, thingDistance, type CableEngine, type Side, type ValveChest } from './logic2';
+import { TANK2_DRAINED, newCableEngine, newValveChest, stepTankLevel, type CableEngine, type Side, type ValveChest } from './logic2';
 
 // The second act: burning the stone does not end it. What holds the cable over the bow starts to pull.
 
 /** Flags that open the second act. Which chain locker hides the wireless operator, and which bow cable
  * the thing is climbing, are decided per playthrough. */
-export function beginAct2Flags(g: Pick<GameAPI, 'setFlag' | 'playTime'>, rnd: () => number = Math.random): void {
+export function beginAct2Flags(g: Pick<GameAPI, 'setFlag'>, rnd: () => number = Math.random): void {
   g.setFlag('act2');
   g.setFlag('a2.pellStbd', rnd() < 0.5);
   g.setFlag('a2.thingStbd', rnd() < 0.5);
-  /** When the thing started to climb (play time, so that it survives saving and loading). */
-  g.setFlag('a2.t0', g.playTime);
   // Whoever drowned the master left the sea valve and the tank suction open: tank No.2 is flooded.
   g.setFlag('vc.sea', true);
   g.setFlag('vc.tank2', true);
@@ -106,11 +104,6 @@ export function setCableEngine(g: Pick<GameAPI, 'setFlag'>, s: CableEngine): voi
     g.setFlag(`ce.${side}Out`, !s.clutch[side]);
     g.setFlag(`ce.${side}Gone`, s.gone[side]);
   }
-}
-
-/** Current distance of the thing below the bow (nautical miles). */
-export function thingNow(g: Pick<GameAPI, 'num' | 'playTime'>): number {
-  return thingDistance(g.playTime - g.num('a2.t0'));
 }
 
 // ---------------------------------------------------------------- the finale on the fore deck

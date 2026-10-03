@@ -244,12 +244,11 @@ export const CANDLE_SECONDS = 70;
 export const HUT_NM = 0.1;
 
 /**
- * Distance (nautical miles) from the station to the fault, `seconds` of play after the act began: in the
- * shore section, closing on the hut at a few metres a minute, and stopping just off the beach.
+ * Line distance (nautical miles) from the station to the fault when it is measured: in the shore section,
+ * some 450 m beyond the hut. It holds still while it is measured, so the bridge has one answer: 1.33 Ω,
+ * 0133 on the 10 : 1000 arms.
  */
-export function landfallDistance(seconds: number): number {
-  return Math.max(HUT_NM + 0.02, 0.34 - 0.00008 * Math.max(0, seconds));
-}
+export const LANDFALL_NM = 0.341;
 
 // ---------------------------------------------------------------- The signal from the cable hut
 

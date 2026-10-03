@@ -427,7 +427,7 @@ if (run(8)) {
       await page.waitForTimeout(100);
     }
   };
-  const act2 = { power: true, idolBurned: true, act2: true, 'a2.t0': 0, 'vc.sea': true, 'vc.tank2': true, 'vc.level': 1, fcsleSeen: true, testroomSeen: true, tank2Seen: true, 'a2.deckSeen': true, engineSeen: true };
+  const act2 = { power: true, idolBurned: true, act2: true, 'vc.sea': true, 'vc.tank2': true, 'vc.level': 1, fcsleSeen: true, testroomSeen: true, tank2Seen: true, 'a2.deckSeen': true, engineSeen: true };
 
   // (a) Opening the door that only echoed lets the thing out — and no key.
   await page.evaluate((f) => window.__btk.setFlags({ ...f, 'a2.pellStbd': true }), act2);
@@ -558,28 +558,13 @@ if (run(8)) {
   await page.close();
 }
 if (run(8)) {
-  // (e) The thing's climb runs on play time, so a save and reload does not reset it; (f) a save from
-  // before the second act existed opens it.
+  // (e) A save from before the second act existed opens it.
   const page = await open();
   await page.evaluate(() => localStorage.clear());
   await page.evaluate(() => window.__btk.play('testroom', 0, 1.0, 0));
   await page.evaluate(() => {
-    const g = window.__btk.game;
     window.__btk.setFlags({ power: true, idolBurned: true, act2: true, testroomSeen: true });
-    g.state.time = 5000;
-    window.__btk.setFlags({ 'a2.t0': 4000 });
-    g.save(false);
   });
-  await page.reload();
-  await page.waitForFunction(() => !!window.__btk);
-  await page.waitForTimeout(600);
-  await page.locator('#modal .title .btn', { hasText: '이어하기' }).click();
-  await page.waitForTimeout(1500);
-  const nm = await page.evaluate(() => {
-    const g = window.__btk.game;
-    return 2.1 - 0.00015 * (g.playTime - g.state.flags['a2.t0']);
-  });
-  check(nm < 1.96 && nm > 1.9, `after reload the fault is still ~1.95 nm below the bow (${nm.toFixed(3)})`);
   await page.evaluate(() => {
     const g = window.__btk.game;
     for (const k of Object.keys(g.state.flags)) if (k === 'act2' || k.startsWith('a2.') || k.startsWith('vc.')) delete g.state.flags[k];
@@ -591,7 +576,7 @@ if (run(8)) {
   await page.locator('#modal .title .btn', { hasText: '이어하기' }).click();
   await page.waitForTimeout(1500);
   const f = (await info(page)).flags;
-  check(f.act2 === true && f['vc.sea'] === true && typeof f['a2.t0'] === 'number', 'an old save with the stone burned opens the second act');
+  check(f.act2 === true && f['vc.sea'] === true && typeof f['a2.thingStbd'] === 'boolean', 'an old save with the stone burned opens the second act');
   await page.close();
 }
 
@@ -648,7 +633,7 @@ if (run(9)) {
       const g = window.__btk.game;
       g.state.flags = {};
       window.__btk.setFlags({
-        act3: true, 'a3.pell': false, 'a3.t0': g.playTime, 'a3.seed': 77, 'a3.combo': 472,
+        act3: true, 'a3.pell': false, 'a3.seed': 77, 'a3.combo': 472,
         'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true, 'sw.bridge': false, 'sw.coil': false,
         'a3.batteryOpen': true, 'a3.coilSeen': true, 'a3.batteryLook': true, 'a3.boardSeen': true, 'a3.opsSeen': true, 'a3.beachSeen': true,
         ...extra,

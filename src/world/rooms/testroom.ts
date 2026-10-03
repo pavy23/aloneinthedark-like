@@ -6,7 +6,7 @@ import { part, quad } from '../../render/geo';
 import * as P from '../props';
 import { exit, look, pickup, rect } from './common';
 import { SIDE_KO, thingSide } from '../../game/act2';
-import { SHORE_END_NM } from '../../game/logic2';
+import { SHORE_END_NM, THING_NM } from '../../game/logic2';
 
 // Over his left shoulder: the galvanometer and its scale stay in view to the left of the docked panel.
 const BRIDGE_CAM: CameraDef = { id: 'bridgeClose', pos: [-0.9, 1.75, 2.15], look: [0.35, 0.85, 3.15], fov: 52, zones: [], hidePlayer: true };
@@ -116,7 +116,7 @@ export const testroom: RoomDef = {
           const tag = (x: 'port' | 'stbd') => (x === 'port' ? 'B — 좌현' : 'C — 우현');
           await gg.say(
             `기록을 다시 본다. ${tag(s === 'port' ? 'stbd' : 'port')} 끝은 ${SHORE_END_NM.toLocaleString('en-US')}해리 너머 육지국까지 멀쩡히 이어져 있다.`,
-            `${tag(s)} 끝은 2해리 남짓에서 끊겨 있다. 그리고 그 끊긴 자리가, 재는 동안에도 배 쪽으로 다가왔다.`,
+            `${tag(s)} 끝은 ${THING_NM}해리에서 끊겨 바다에 닿아 있다. 베일이 마지막으로 잰 2.2해리보다 배에 가깝다.`,
             `그것은 ${SIDE_KO[s]} 케이블을 타고 올라오고 있다. 권양기에서 ${SIDE_KO[s]} 드럼을 놓아 보내야 한다.`,
             '펠의 말로는, 고정핀 자물쇠 열쇠는 선장이 목에 걸고 다녔다. 그리고 선장은 2번 탱크로 내려갔다.',
           );

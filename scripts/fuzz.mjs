@@ -32,15 +32,15 @@ const flagSets = [
   { power: true, 'trig:corridor:lightsOnAmbush': true, wtOpen: true },
   { power: true, 'got:idol': true, wtOpen: true, engAmbush: true },
   // The second act, at various points.
-  { power: true, idolBurned: true, act2: true, 'a2.t0': 0, 'vc.sea': true, 'vc.tank2': true, 'vc.level': 1 },
-  { power: true, idolBurned: true, act2: true, 'a2.t0': 0, pellFreed: true, testUnlocked: true, 'a2.measured': true, tank2Drained: true, tank2Open: true },
+  { power: true, idolBurned: true, act2: true, 'vc.sea': true, 'vc.tank2': true, 'vc.level': 1 },
+  { power: true, idolBurned: true, act2: true, pellFreed: true, testUnlocked: true, 'a2.measured': true, tank2Drained: true, tank2Open: true },
 ];
 // The third act (Bell Cove): as found, with Pell sitting at the coil, and alone with the candle burning.
 const sw = (o) => ({ 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true, 'sw.bridge': false, 'sw.coil': false, ...o });
 const act3Sets = [
-  { act3: true, 'a3.pell': false, 'a3.t0': 0, 'a3.seed': 5, 'a3.combo': 123, ...sw({}) },
-  { act3: true, 'a3.pell': true, 'a3.t0': 0, 'a3.seed': 9, 'a3.combo': 808, 'a3.batteryOpen': true, 'a3.pellMet': true, 'a3.handle': true, 'a3.measured': true, 'a3.pellReady': true, ...sw({ 'sw.recorder': false, 'sw.condenser': false, 'sw.protector': false, 'sw.coil': true }) },
-  { act3: true, 'a3.pell': false, 'a3.t0': 0, 'a3.seed': 3, 'a3.combo': 51, 'a3.batteryOpen': true, 'a3.handle': true, 'a3.measured': true, 'a3.timerAt': 25, ...sw({ 'sw.coil': true }) },
+  { act3: true, 'a3.pell': false, 'a3.seed': 5, 'a3.combo': 123, ...sw({}) },
+  { act3: true, 'a3.pell': true, 'a3.seed': 9, 'a3.combo': 808, 'a3.batteryOpen': true, 'a3.pellMet': true, 'a3.handle': true, 'a3.measured': true, 'a3.pellReady': true, ...sw({ 'sw.recorder': false, 'sw.condenser': false, 'sw.protector': false, 'sw.coil': true }) },
+  { act3: true, 'a3.pell': false, 'a3.seed': 3, 'a3.combo': 51, 'a3.batteryOpen': true, 'a3.handle': true, 'a3.measured': true, 'a3.timerAt': 25, ...sw({ 'sw.coil': true }) },
 ];
 const ACT3_ROOMS = ['station', 'opsroom', 'battery', 'beach'];
 // The fourth act (the St Brendan): at the start, with the cable hooked, and with the root up over the bow.
