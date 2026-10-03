@@ -395,6 +395,12 @@ body {
 .story .line.show {
   opacity: 1;
 }
+.story.compact {
+  line-height: 1.6;
+}
+.story.compact .line {
+  margin: 0.55em 0;
+}
 .story .date {
   font-family: var(--font-label);
   color: var(--brass);

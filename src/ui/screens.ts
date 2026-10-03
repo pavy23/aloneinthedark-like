@@ -90,12 +90,12 @@ function openChapters(g: Game, title: Modal): void {
 
 // ------------------------------------------------------------------ Narrative screens
 
-function story(g: Game, dateLine: string, lines: string[], opts: { finalButtons?: Array<[string, () => void]>; bg?: string } = {}): Promise<void> {
+function story(g: Game, dateLine: string, lines: string[], opts: { finalButtons?: Array<[string, () => void]>; bg?: string; compact?: boolean } = {}): Promise<void> {
   return new Promise((resolve) => {
     const lineEls = lines.map((l) => h('p', { class: 'line', text: l }));
     const skip = h('div', { class: 'skip', text: '계속하려면 Space · 클릭 · 탭' });
     const buttons = h('div', { class: 'row', style: 'justify-content:center' });
-    const box = h('div', { class: 'story' }, h('div', { class: 'date', text: dateLine }), ...lineEls, skip, buttons);
+    const box = h('div', { class: opts.compact ? 'story compact' : 'story' }, h('div', { class: 'date', text: dateLine }), ...lineEls, skip, buttons);
     const el = h('div', { class: 'modal', style: `background:${opts.bg ?? 'rgba(0,0,0,0.94)'}` }, box);
     let shown = 0;
     let t = 0;
@@ -369,7 +369,8 @@ export async function playVerdict(g: Game): Promise<void> {
       `— 에필로그 · ${['우연한 해난', v.testimony ? '봉인된 증언' : '적히지 않은 증언', '모른다는 대답'][Math.min(2, answer)]} —`,
       stats,
     ],
-    { finalButtons: [['타이틀로', () => g.showTitle()]], bg: 'rgba(10,9,8,0.96)' },
+    // The ruling is long: set close, so that it fits on one screen.
+    { finalButtons: [['타이틀로', () => g.showTitle()]], bg: 'rgba(10,9,8,0.96)', compact: true },
   );
 }
 
