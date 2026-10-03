@@ -13,5 +13,9 @@ import { station } from './station';
 import { opsroom } from './opsroom';
 import { battery } from './battery';
 import { beach } from './beach';
+import { sbdeck } from './sbdeck';
+import { sbbridge } from './sbbridge';
+import { sbtest } from './sbtest';
+import { sbstoke } from './sbstoke';
 
-export const ROOMS: Record<RoomId, RoomDef> = { deck, bridge, corridor, cabin, radio, engine, hold, fcsle, testroom, tank2, station, opsroom, battery, beach };
+export const ROOMS: Record<RoomId, RoomDef> = { deck, bridge, corridor, cabin, radio, engine, hold, fcsle, testroom, tank2, station, opsroom, battery, beach, sbdeck, sbbridge, sbtest, sbstoke };

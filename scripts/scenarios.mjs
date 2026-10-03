@@ -1,5 +1,5 @@
 // Side-path scenarios: water hammer ambush, death -> game over -> retry, manual save/continue, phone layout,
-// camera coverage, control schemes, and the wrong turns of the second and third acts.
+// camera coverage, control schemes, and the wrong turns of the second, third and fourth acts.
 // Usage: npm run build && node scripts/scenarios.mjs   (SCEN=8,9 runs only those sections)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -214,8 +214,10 @@ if (run(5)) {
 // ---------------------------------------------------------------- 6. every reachable spot is covered by a camera
 if (run(6)) {
   const page = await open();
-  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach']) {
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach', 'sbdeck', 'sbbridge', 'sbtest', 'sbstoke']) {
     if (room === 'fcsle') await page.evaluate(() => window.__btk.setFlags({ idolBurned: true, act2: true, pellFreed: true, tank2Drained: true, tank2Open: true }));
+    // The St Brendan as she is at the end, the buoy over the side and the root up on the bow.
+    if (room === 'sbdeck') await page.evaluate(() => window.__btk.setFlags({ act4: true, power: true, 'a4.seed': 3, 'a4.buoyed': true, 'a4.pickup': true, 'a4.rootUp': true }));
     await page.evaluate((r) => window.__btk.play(r), room);
     await page.waitForTimeout(150);
     const res = await page.evaluate(() => {
@@ -803,6 +805,182 @@ if (run(9)) {
   f = (await info(page)).flags;
   check((await info(page)).room === 'station' && f.act3 === true && f['a3.pell'] === true, 'starting the third act from the title (with Pell, as reached)');
   await page.screenshot({ path: '.shots/scen/9-chapter-act3.png' });
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 10. the fourth act's wrong turns
+if (run(10)) {
+  const page = await open();
+  await page.evaluate(() => localStorage.clear());
+  const settle = async () => {
+    for (let i = 0; i < 80; i++) {
+      await page.evaluate(() => window.__btk.game.ui.clearMessages());
+      const s = await info(page);
+      if (!s.busy) return;
+      await page.waitForTimeout(100);
+    }
+  };
+  const hear = async (ms = 8000) => {
+    const seen = [];
+    for (let i = 0; i < 30; i++) {
+      const s = await info(page);
+      if (s.busy || s.ui) break;
+      await page.waitForTimeout(100);
+    }
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      const [open, text] = await page.evaluate(() => [!window.__btk.game.ui.msgEl.hidden, window.__btk.game.ui.msgText.textContent]);
+      if (open) {
+        if (seen.at(-1) !== text) seen.push(text);
+        await page.keyboard.press('Space');
+      } else if (!(await info(page)).busy) {
+        await page.waitForTimeout(200);
+        if (!(await info(page)).busy && !(await page.evaluate(() => !window.__btk.game.ui.msgEl.hidden))) return seen;
+      }
+      await page.waitForTimeout(120);
+    }
+    return seen;
+  };
+  const use = async () => {
+    for (let k = 0; k < 2; k++) {
+      await page.waitForTimeout(250);
+      await page.evaluate(() => window.__btk.game.input.setTouch('action', true));
+      await page.waitForTimeout(120);
+      await page.evaluate(() => window.__btk.game.input.setTouch('action', false));
+      for (let i = 0; i < 15; i++) {
+        const s = await info(page);
+        if (s.busy || s.ui) return;
+        await page.waitForTimeout(100);
+      }
+    }
+  };
+  const act4 = (extra = {}) =>
+    page.evaluate((extra) => {
+      const g = window.__btk.game;
+      g.state.flags = {};
+      window.__btk.setFlags({ act4: true, power: true, 'a4.pell': false, 'a4.t0': 0, 'a4.seed': 4242, 'a4.attempt': 0, 'a4.heading': 334, 'a4.deckIntro': true, 'a4.bosunMet': true, 'a4.testSeen': true, 'a4.rossMet': true, ...extra });
+    }, extra);
+  // Where the panel's run will meet the bottom (the same layout the game draws).
+  const layout = () =>
+    page.evaluate(() => {
+      const f = window.__btk.game.state.flags;
+      let s = Math.floor(Math.abs(f['a4.seed'] * 31 + f['a4.attempt'] * 977 + 7)) % 2147483647 || 1;
+      const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < 3; i++) r();
+      const cableAt = 0.45 + r() * 0.12;
+      const rocks = [0.14 + r() * 0.1];
+      if (r() < 0.7) rocks.push(rocks[0] + 0.1 + r() * (cableAt - rocks[0] - 0.16));
+      return { cableAt, rocks };
+    });
+  const runFor = async (p) => {
+    // The run's clock: p of the way along, at 80 s a run (read off the panel's elapsed time).
+    for (let i = 0; i < 1200; i++) {
+      const txt = await page.locator('#modal .bridge-read').first().innerText().catch(() => '');
+      const m = txt.match(/경과 (\d+)시간 (\d+)분/);
+      if (!m) return false;
+      if ((Number(m[1]) * 60 + Number(m[2])) / 150 >= p) return true;
+      await page.waitForTimeout(50);
+    }
+    return false;
+  };
+
+  // (a) The dynamometer before the run is laid off: nothing to read.
+  await act4({});
+  await page.evaluate(() => window.__btk.play('sbdeck', 0.25, 5.95, 0));
+  await settle();
+  let lines = [];
+  await use();
+  lines = await hear();
+  check(lines.some((l) => l.includes('선교에서 침로를 잡아야')), 'the dynamometer before the run: go and set the heading first');
+
+  // (b) Stopping on a rock's spike: an empty, bent grapnel (and, the first time, what is caught on it).
+  await act4({ 'a4.runSet': true, 'a4.heading': 304 });
+  await page.evaluate(() => window.__btk.play('sbdeck', 0.25, 5.95, 0));
+  await settle();
+  let lay = await layout();
+  await use();
+  await page.waitForSelector('#modal canvas.strain-plot');
+  check(await runFor(lay.rocks[0]), 'the run reaches the first rock');
+  await page.locator('#modal .btn', { hasText: '기관 정지' }).click();
+  lines = await hear(12000);
+  let f = (await info(page)).flags;
+  check(lines.some((l) => l.includes('바위였다')) && lines.some((l) => l.includes('손가락')) && f['a4.attempt'] === 1 && f['a4.hooked'] !== true, `stopped on a rock: a bent grapnel, a finger, and another run (${lines.at(-1) ?? ''})`);
+
+  // (c) The chart's own square (334°): the grapnel skids over the cable.
+  await act4({ 'a4.runSet': true, 'a4.heading': 334 });
+  await page.evaluate(() => window.__btk.play('sbdeck', 0.25, 5.95, 0));
+  await settle();
+  lay = await layout();
+  await use();
+  await page.waitForSelector('#modal canvas.strain-plot');
+  check(await runFor(lay.cableAt), 'the run reaches the cable');
+  await page.locator('#modal .btn', { hasText: '기관 정지' }).click();
+  lines = await hear(12000);
+  f = (await info(page)).flags;
+  check(lines.some((l) => l.includes('미끄러져 넘어갔소')) && lines.some((l) => l.includes('직각이어야')) && f['a4.hooked'] !== true, 'square on the chart, oblique over the ground: the grapnel skids, and the bosun says why');
+
+  // (d) Heaving at half speed into the swell parts the bight: back to grappling.
+  await act4({ 'a4.runSet': true, 'a4.heading': 304, 'a4.hooked': true });
+  await page.evaluate(() => window.__btk.play('sbdeck', 0.9, 1.8, -0.84));
+  await settle();
+  await use();
+  await page.waitForSelector('#modal canvas.heave-plot');
+  await page.locator('#modal .btn', { hasText: '반속' }).click();
+  lines = await hear(15000);
+  f = (await info(page)).flags;
+  check(lines.some((l) => l.includes('바이트가 끊어졌소')) && f['a4.hooked'] === false && f['a4.attempt'] === 1, 'heaving hard into the swell parts the bight: grapple again');
+
+  // (e) Ross will not seal an end nobody has measured.
+  await act4({ 'a4.runSet': true, 'a4.hooked': true, 'a4.raised': true, 'a4.cut': true, 'a4.endsSeen': true });
+  await page.evaluate(() => window.__btk.play('sbtest', 0.6, 2.0, 0));
+  await settle();
+  await use();
+  await page.waitForSelector('#modal .ends-grid');
+  await page.locator('#modal .btn', { hasText: '이 끝을 부표에' }).click();
+  check((await page.locator('#modal .hut-log').innerText()).includes('재 보지도 않고'), 'buoying an end untested: Ross refuses');
+  check((await info(page)).flags['a4.buoyed'] !== true, 'nothing buoyed');
+  await page.keyboard.press('Escape');
+  await settle();
+
+  // (f) The root with bare hands; then a reload with the root up brings the limbs back.
+  await act4({ 'a4.runSet': true, 'a4.hooked': true, 'a4.raised': true, 'a4.cut': true, 'a4.buoyed': true, 'a4.pickup': true, 'a4.rootUp': true });
+  await page.evaluate(() => window.__btk.play('sbdeck', 0, 8.6, 0));
+  await settle();
+  await page.evaluate(() => window.__btk.game.clearCreatures());
+  await page.evaluate(() => window.__btk.game.equip(null));
+  await page.evaluate(() => window.__btk.game.input.setTouch('attack', true));
+  await page.waitForTimeout(120);
+  await page.evaluate(() => window.__btk.game.input.setTouch('attack', false));
+  lines = await hear();
+  check(lines.some((l) => l.includes('맨손으로는 어림도 없다')), 'the root with bare hands: an axe is needed (and where one is)');
+  check((await info(page)).flags['a4.heartHits'] === undefined, 'no blow landed');
+  await page.evaluate(() => window.__btk.game.save(false));
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(900);
+  await page.locator('#modal .title .btn', { hasText: '이어하기' }).click();
+  for (let i = 0; i < 40 && (await info(page)).room !== 'sbdeck'; i++) await page.waitForTimeout(200);
+  await page.waitForTimeout(2500);
+  const st = await info(page);
+  check(st.room === 'sbdeck' && st.creatures.filter((c) => c.id.startsWith('a4limb')).length === 2, 'reloading with the root up: the limbs are back on the bow');
+  await page.screenshot({ path: '.shots/scen/10-root-reload.png' });
+
+  // (g) The chapter select offers the fourth act once reached.
+  await page.evaluate(() => localStorage.setItem('btk.progress.v1', JSON.stringify({ act: 4, pell: true })));
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(900);
+  await page.locator('#modal .title .btn', { hasText: '막 선택' }).click();
+  await page.waitForSelector('#modal .panel .eyebrow:has-text("CHAPTERS")');
+  const fourth = page.locator('#modal .btn', { hasText: '4막 · 갈고리' });
+  check((await fourth.count()) === 1 && !(await fourth.isDisabled()), 'chapter select lists the fourth act');
+  await fourth.click();
+  for (let i = 0; i < 60 && (await info(page)).room !== 'sbdeck'; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  f = (await info(page)).flags;
+  check((await info(page)).room === 'sbdeck' && f.act4 === true && f['a4.pell'] === true && (await info(page)).inv.includes('pellLetter'), 'starting the fourth act from the title (Pell at Bell Cove, his letter in hand)');
   await page.close();
 }
 

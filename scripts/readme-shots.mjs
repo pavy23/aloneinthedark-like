@@ -1,4 +1,5 @@
 // Regenerate the screenshots used in README.md (docs/images). Usage: npm run build && node scripts/readme-shots.mjs
+// (ONLY=sbdeck,chart regenerates just those images.)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 
@@ -13,10 +14,12 @@ const page = await browser.newPage({ viewport: { width: 640, height: 480 } });
 await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => !!window.__btk);
 await page.waitForTimeout(2500);
-await page.screenshot({ path: 'docs/images/title.png' });
+const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
+if (!only || only.includes('title')) await page.screenshot({ path: 'docs/images/title.png' });
 
 // camera: 'follow' (the default player-centred camera) or 'fixed' (the original fixed shots).
 const scene = async (file, room, x, z, h, flags = {}, extra, camera = 'fixed') => {
+  if (only && !only.includes(file)) return;
   await page.evaluate(([r, x, z, h, f, cam]) => {
     localStorage.clear();
     const g = window.__btk.game;
@@ -91,5 +94,21 @@ await scene('beach', 'beach', -3.4, 5.2, 1.24, { ...act3, 'a3.pellReady': true, 
   await page.evaluate(() => window.__btk.game.cutTo({ id: 'x', pos: [-4.4, 1.9, 2.9], look: [2.6, 2.6, 7.1], fov: 58, zones: [] }));
   await page.waitForTimeout(3600);
 }, 'follow');
+// The fourth act: the St Brendan at first light, the run laid off on the chart, the root over the bow.
+const act4 = { act4: true, power: true, 'a4.pell': true, 'a4.t0': 0, 'a4.seed': 1234, 'a4.attempt': 0, 'a4.heading': 334, 'a4.deckIntro': true, 'a4.bosunMet': true };
+await scene('sbdeck', 'sbdeck', -2.3, 3.2, 0.45, act4, undefined, 'follow');
+await page.setViewportSize({ width: 960, height: 720 });
+await scene('chart', 'sbbridge', -3.75, -0.45, Math.PI, { ...act4, 'a4.captainMet': true, 'a4.chartSeen': true, 'a4.heading': 304 }, async () => {
+  await page.evaluate(() => {
+    window.__btk.give('grappleCard');
+    void window.__btk.game.openPanel('chart');
+  });
+  await page.waitForTimeout(600);
+});
+await page.setViewportSize({ width: 640, height: 480 });
+await scene('root', 'sbdeck', 0.9, 6.4, -0.24, { ...act4, 'a4.runSet': true, 'a4.hooked': true, 'a4.raised': true, 'a4.cut': true, 'a4.buoyed': true, 'a4.pickup': true, 'a4.rootUp': true }, async () => {
+  await page.evaluate(() => window.__btk.game.cutTo({ id: 'x', pos: [2.8, 2.4, 5.6], look: [-0.3, 1.0, 10.4], fov: 58, zones: [] }));
+  await page.waitForTimeout(2200);
+});
 await browser.close();
 server.kill();

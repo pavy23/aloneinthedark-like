@@ -21,13 +21,14 @@ import { openDoc } from '../ui/DocReader';
 import { openSafePanel, openDynamoPanel, openRadioPanel } from '../ui/panels';
 import { openBridgePanel, openCablePanel, openValvePanel } from '../ui/panels2';
 import { openBridge3Panel, openCoilPanel, openComboPanel, openHutKeyPanel, openRackPanel, openSwitchPanel, openTapePanel } from '../ui/panels3';
+import { openChartPanel, openEndsPanel, openGrapplePanel, openHeavePanel } from '../ui/panels4';
 import * as Screens from '../ui/screens';
 import { TouchControls } from '../ui/Touch';
 import { FollowCam } from './FollowCam';
 import { basisFromView, MoveLatch } from './controls';
 import { beginAct2Flags, startAct2 } from './act2';
 import { rackSgs, tickAct3 } from './act3';
-import { beforeTheFurnace, landfallState } from './chapters';
+import { beforeTheFurnace, hookState, landfallState } from './chapters';
 
 type Mode = 'boot' | 'title' | 'play' | 'ending';
 
@@ -973,6 +974,10 @@ export class Game implements GameAPI {
       bridge3: openBridge3Panel,
       coil: openCoilPanel,
       hutKey: openHutKeyPanel,
+      chart: openChartPanel,
+      grapple: openGrapplePanel,
+      heave: openHeavePanel,
+      ends: openEndsPanel,
     }[kind];
     await this.guard(open(this));
   }
@@ -998,8 +1003,11 @@ export class Game implements GameAPI {
     // Burning the stone stills the first act's dead for good; the second act's ("a2…") come for the rest,
     // until the cable is let go and the sea takes them all back. At Bell Cove only the third act's ("a3…")
     // walk, until the discharge reaches the thing.
+    // Aboard the St Brendan only the fourth act's ("a4…"), until the heart is burned.
     if (this.flag(`dead:${s.id}`)) return;
-    if (this.flag('act3') ? !s.id.startsWith('a3') || this.flag('a3.done') : this.flag('cableFreed') || (this.flag('idolBurned') && !s.id.startsWith('a2'))) return;
+    if (this.flag('act4')) {
+      if (!s.id.startsWith('a4') || this.flag('a4.done')) return;
+    } else if (this.flag('act3') ? !s.id.startsWith('a3') || this.flag('a3.done') : this.flag('cableFreed') || (this.flag('idolBurned') && !s.id.startsWith('a2'))) return;
     if (this.creatures.some((c) => c.id === s.id && c.state !== 'gone')) return;
     const events = {
       onStrike: (cr: Creature) => this.creatureStrike(cr),
@@ -1044,9 +1052,20 @@ export class Game implements GameAPI {
 
   async nextAct(): Promise<void> {
     if (this.mode !== 'play' || this.dead) return;
-    // The third act is the last one there is (for now): it ends the game.
-    if (this.flag('act3')) {
+    // The fourth act is the last: it ends the game.
+    if (this.flag('act4')) {
       await this.ending();
+      return;
+    }
+    // The end of the third act: the morning at Bell Cove, then the St Brendan.
+    if (this.flag('act3')) {
+      this.mode = 'ending';
+      this.clearCreatures();
+      this.audio.setDanger(false);
+      const pell3 = this.flag('a3.pell');
+      noteProgress(4, pell3);
+      await this.guard(Screens.playLandfallEnd(this, pell3));
+      await this.beginHook(hookState(pell3, this.state), true);
       return;
     }
     // The end of the second act: down the Jacob's ladder, the interlude, then Bell Cove.
@@ -1068,8 +1087,12 @@ export class Game implements GameAPI {
     this.clearCreatures();
     this.resetTransient();
     this.visitedCaption.clear();
-    if (act >= 3) {
+    if (act >= 4) {
       // Like a new game: the autosave is only replaced at the first door.
+      await this.beginHook(hookState(pell), false);
+      return;
+    }
+    if (act === 3) {
       await this.beginLandfall(landfallState(pell), false);
       return;
     }
@@ -1105,6 +1128,23 @@ export class Game implements GameAPI {
     await this.enterRoom('station', 'arrive', { caption: false, autosave });
     this.renderer.fade = 0;
     this.chapter('3막 · 뭍으로', 'ACT III · LANDFALL');
+  }
+
+  /** The St Brendan: the fourth act's opening screen, then her fore deck at first light. */
+  private async beginHook(s: GameState, autosave: boolean): Promise<void> {
+    this.ui.closeAll();
+    this.clearCreatures();
+    this.resetTransient();
+    this.state = s;
+    this.visitedCaption.clear();
+    noteProgress(4, s.flags['a4.pell'] === true);
+    this.pl.setWeapon(null, null);
+    await this.guard(Screens.playHookIntro(this, s.flags['a4.pell'] === true));
+    this.mode = 'play';
+    this.pl.object.visible = true;
+    await this.enterRoom('sbdeck', 'start', { caption: false, autosave });
+    this.renderer.fade = 0;
+    this.chapter('4막 · 갈고리', 'ACT IV · THE GRAPNEL');
   }
 
   hasPower(): boolean {
@@ -1246,5 +1286,13 @@ function captionSub(id: RoomId): string {
       return 'BATTERY & TESTING ROOM';
     case 'beach':
       return 'THE CABLE HUT';
+    case 'sbdeck':
+      return 'C.S. ST BRENDAN · FORE DECK';
+    case 'sbbridge':
+      return 'WHEELHOUSE';
+    case 'sbtest':
+      return 'TESTING ROOM';
+    case 'sbstoke':
+      return 'STOKEHOLD';
   }
 }

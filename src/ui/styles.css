@@ -952,3 +952,28 @@ kbd {
 .morse-key.off {
   opacity: 0.45;
 }
+
+/* Act 4 panels */
+.chart-plot {
+  display: block;
+  width: min(440px, 100%);
+  height: auto;
+  margin: 0.6em auto 0.4em;
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
+}
+.ends-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.ends-grid .cell {
+  font-size: 0.95em;
+  font-family: var(--font-type);
+  font-variant-numeric: tabular-nums;
+  color: #f3e3b8;
+  padding: 0.5em 0.3em;
+}
+.ends-grid .cell .no {
+  font-family: var(--font-label);
+  letter-spacing: 0.15em;
+}

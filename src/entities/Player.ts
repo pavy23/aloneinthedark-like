@@ -126,10 +126,10 @@ export class Player {
       c.rotation.set(0, Math.PI / 2, Math.PI / 2);
       c.position.set(0, -0.05, 0.05);
       this.weaponMesh.add(c);
-    } else if (id === 'axe' || id === 'woodAxe') {
+    } else if (id === 'axe' || id === 'woodAxe' || id === 'shipAxe') {
       const g = new THREE.Group();
       rod(g, M.woodLight, { x: 0, y: 0.25, z: 0 }, { x: 0, y: -0.55, z: 0 }, 0.022, 5);
-      partC(g, id === 'axe' ? M.redPaint : M.ironLight, 0.08, -0.5, 0, 0.18, 0.12, 0.03);
+      partC(g, id === 'woodAxe' ? M.ironLight : M.redPaint, 0.08, -0.5, 0, 0.18, 0.12, 0.03);
       partC(g, M.ironLight, 0.17, -0.5, 0, 0.04, 0.16, 0.03);
       g.rotation.x = Math.PI / 2;
       g.position.set(0, -0.03, 0.1);

@@ -72,6 +72,7 @@ function openChapters(g: Game, title: Modal): void {
     [1, '1막 · 용골 아래', '1925년 10월 · 탈라사호'],
     [2, '2막 · 선수창 아래', '같은 밤 · 선수'],
     [3, '3막 · 뭍으로', '1926년 2월 · 벨 코브 양륙국'],
+    [4, '4막 · 갈고리', '1926년 4월 · 수리선 세인트 브렌던호'],
   ];
   const list = h(
     'div',
@@ -79,7 +80,7 @@ function openChapters(g: Game, title: Modal): void {
     ...acts.map(([n, name, when]) => button(`${name} — ${when}`, () => void start(n), { disabled: n > p.act })),
     button('돌아가기', () => g.ui.pop(modal)),
   );
-  const note = p.act >= 3 ? `3막은 2막 끝의 선택을 따릅니다: ${p.pell ? '펠과 함께 내려왔다' : '혼자 내려왔다'}.` : '도달한 막부터 다시 시작할 수 있습니다.';
+  const note = p.act >= 3 ? `3·4막은 2막 끝의 선택을 따릅니다: ${p.pell ? '펠과 함께 내려왔다' : '혼자 내려왔다'}.` : '도달한 막부터 다시 시작할 수 있습니다.';
   const el = h('div', { class: 'modal' }, h('div', { class: 'panel', style: 'width:min(520px,100%)' }, h('div', { class: 'eyebrow', text: 'CHAPTERS · 막 선택' }), h('p', { class: 'muted', text: note }), list));
   const nav = new FocusNav(list, g.audio);
   const modal = g.ui.push({ el, nav });
@@ -214,12 +215,10 @@ export async function playLandfallIntro(g: Game, withPell: boolean): Promise<voi
   );
 }
 
-export async function playEnding(g: Game): Promise<void> {
+/** The morning after Bell Cove: what the fire took, what it did not. Then the fourth act begins. */
+export async function playLandfallEnd(g: Game, withPell: boolean): Promise<void> {
   g.audio.setDanger(false);
   g.audio.setAmbience('title');
-  const st = g.state;
-  const stats = `플레이 시간 ${formatTime(st.time)} · 기록 ${st.saves}회 · 죽음 ${st.deaths}회 · 읽은 문서 ${st.docs.length}편`;
-  const withPell = g.flag('a3.pell');
   await story(
     g,
     '1926년 2월 28일 · 벨 코브',
@@ -236,7 +235,56 @@ export async function playEnding(g: Game): Promise<void> {
           ]),
       '불꽃이 태운 것은 그것의 손 하나였다. 케이블 저편, 탈라사호가 케이블을 놓아 보낸 바다 밑 어딘가에 그것의 뿌리가 남아 있다.',
       '회사는 봄에 수리선을 보내 그 구간을 끌어올리기로 했다. 나는 그 배에 타겠다고 했다.',
-      '— 3막 끝 · 4막에서 계속 —',
+      '— 3막 끝 —',
+    ],
+    { bg: 'rgba(8,10,12,0.96)' },
+  );
+}
+
+/** The fourth act's opening: the St Brendan on station over the cable's grave. */
+export async function playHookIntro(g: Game, withPell: boolean): Promise<void> {
+  g.audio.setAmbience('deck');
+  await story(
+    g,
+    '1926년 4월 19일 · 북대서양, 벨 코브 기점 1,036해리',
+    [
+      '3월 내내 벨 코브와 캐리긴은 같은 곳을 가리켰다. 벨 코브 기점 1,036해리. 탈라사호가 케이블을 놓아 보낸 바로 그 자리. 절연은 날마다 떨어졌다.',
+      '회사는 수리선 세인트 브렌던호를 보냈다. 탈라사호 이야기를 들은 선원 절반이 배에서 내렸다. 나는 탔다.',
+      withPell
+        ? '펠은 오지 않았다. 다시는 바다에 나가지 않겠다는 약속을 지키겠다고 했다. 대신 벨 코브의 회선 끝에 앉아 있겠다고 했다.'
+        : '벨 코브에는 새 야간 근무자가 왔다. 그 사람은 내 손을 모른다. 나도 그 사람의 손을 모른다.',
+      '사흘째 밤, 배가 자리에 닿았다. 그리고 이등항해사가 사라졌다. 갑판에는 뱃전에서 시작된 젖은 발자국만 남았다.',
+    ],
+    { bg: 'rgba(8,10,12,0.96)' },
+  );
+}
+
+/** The last ending: the heart in the fire, the cable made good, and who is left to answer. */
+export async function playEnding(g: Game): Promise<void> {
+  g.audio.setDanger(false);
+  g.audio.setAmbience('title');
+  const st = g.state;
+  const stats = `플레이 시간 ${formatTime(st.time)} · 기록 ${st.saves}회 · 죽음 ${st.deaths}회 · 읽은 문서 ${st.docs.length}편`;
+  const withPell = g.flag('a4.pell');
+  await story(
+    g,
+    '1926년 4월 20일 · 세인트 브렌던호',
+    [
+      '불길이 화실 문틈으로 퍼렇게 새어 나왔다. 배 전체가 한 번, 길게 떨었다. 그리고 바다가 조용해졌다.',
+      '그날 저녁 로스가 새 케이블을 이어 부표의 끝까지 가져갔다. 마무리 접속이 끝나자 그는 시험 키를 내게 내밀었다.',
+      ...(withPell
+        ? [
+            '나는 R을 쳤다. 벨 코브에서 곧바로 답이 왔다. R. 그리고 TP.',
+            '…그 뒤로는 아무것도 오지 않았다. 메아리도, 세 번 쉬고 세 번도. 펠이 한 번 더 쳤다. 이번에는 웃는 것 같았다.',
+            '6월, 런던의 보험조합 조사위원회가 나를 불렀다. 증인은 둘이었다. 나와, 바다를 건너온 신호를 듣는 사람.',
+            '— 엔딩 · 두 사람의 증언 —',
+          ]
+        : [
+            '나는 R을 쳤다. 벨 코브의 새 근무자가 답했다. R BC.',
+            '…그 뒤로는 아무것도 오지 않았다. 나는 오래 키 앞에 앉아 있었다. 탈라사호의 선원 거주구에 두고 온 그 두드림이, 이번에는 대답해 주기를 바라면서.',
+            '6월, 런던의 보험조합 조사위원회가 나를 불렀다. 증인은 나 하나였다.',
+            '— 엔딩 · 홀로 돌아오다 —',
+          ]),
       stats,
     ],
     { finalButtons: [['타이틀로', () => g.showTitle()]], bg: 'rgba(8,10,12,0.96)' },

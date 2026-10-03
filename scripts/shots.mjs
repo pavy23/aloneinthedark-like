@@ -1,6 +1,6 @@
 // Headless screenshot tour: title screen + every fixed camera of every room, then the follow camera at
 // every spawn point (doorways are where a follow camera most easily ends up outside the room).
-// Usage: node scripts/shots.mjs [room[,room…]]   (ACT=2 or ACT=3 sets that act's state first)
+// Usage: node scripts/shots.mjs [room[,room…]]   (ACT=2, ACT=3 or ACT=4 sets that act's state first)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
@@ -29,7 +29,7 @@ const setCamera = (camera) =>
     const g = window.__btk.game;
     g.applySettings({ ...g.settings, camera });
   }, camera);
-const ALL_ROOMS = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach'];
+const ALL_ROOMS = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach', 'sbdeck', 'sbbridge', 'sbtest', 'sbstoke'];
 const rooms = ALL_ROOMS.filter((r) => !filter || filter.split(',').includes(r));
 // ACT=2 shows every room as it is in the second act (power on, the stone burned, tank No.2 drained).
 if (process.env.ACT === '2')
@@ -43,6 +43,15 @@ if (process.env.ACT === '3')
     b.game.state.flags = {};
     b.setFlags({ act3: true, 'a3.pell': pell, 'a3.t0': 0, 'a3.seed': 1234, 'a3.combo': 472, 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true });
   }, process.env.PELL === '1');
+// ACT=4 (STAGE=root for the finale, with the root up over the bow): the St Brendan.
+if (process.env.ACT === '4')
+  await page.evaluate((root) => {
+    const b = window.__btk;
+    b.game.state.flags = {};
+    const f = { act4: true, power: true, 'a4.pell': false, 'a4.t0': 0, 'a4.seed': 1234, 'a4.attempt': 0, 'a4.heading': 334 };
+    if (root) Object.assign(f, { 'a4.bosunMet': true, 'a4.runSet': true, 'a4.hooked': true, 'a4.raised': true, 'a4.cut': true, 'a4.buoyed': true, 'a4.pickup': true, 'a4.rootUp': true });
+    b.setFlags(f);
+  }, process.env.STAGE === 'root');
 await setCamera('fixed');
 for (const room of rooms) {
   await page.evaluate((r) => window.__btk.play(r), room);

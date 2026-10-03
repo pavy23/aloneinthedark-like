@@ -1,5 +1,6 @@
 import { MAX_HP, newState, type GameState } from './state';
 import { act3Flags } from './act3';
+import { act4Flags } from './act4';
 
 // Where each act starts. The title screen's chapter select, the debug API and the automated playthroughs
 // all start an act from these definitions.
@@ -59,5 +60,26 @@ export function landfallState(pell: boolean, prev?: GameState): GameState {
   s.inv = ['lantern', 'telegram'];
   s.equipped = null;
   s.flags = act3Flags(pell, s.time);
+  return s;
+}
+
+/**
+ * The fourth act: April 1926, aboard the repair ship over the cable's grave. As with the third act only the
+ * tallies carry over, and whether Pell came ashore (he is at Bell Cove, on the other end of the cable).
+ */
+export function hookState(pell: boolean, prev?: GameState): GameState {
+  const s = newState();
+  if (prev) {
+    s.time = prev.time;
+    s.saves = prev.saves;
+    s.deaths = prev.deaths;
+    s.docs = [...prev.docs];
+  }
+  s.room = 'sbdeck';
+  s.spawn = 'start';
+  s.hp = MAX_HP;
+  s.inv = ['lantern', 'workOrder', pell ? 'pellLetter' : 'bcWire'];
+  s.equipped = null;
+  s.flags = act4Flags(pell, s.time);
   return s;
 }

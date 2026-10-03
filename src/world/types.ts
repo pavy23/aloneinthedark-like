@@ -19,7 +19,12 @@ export type RoomId =
   | 'station'
   | 'opsroom'
   | 'battery'
-  | 'beach';
+  | 'beach'
+  // Act 4: the repair ship St Brendan over the cable's grave
+  | 'sbdeck'
+  | 'sbbridge'
+  | 'sbtest'
+  | 'sbstoke';
 
 export type AmbienceId = 'deck' | 'interior' | 'engine' | 'hold' | 'bridge' | 'snow' | 'shore' | 'station' | 'none';
 export type Surface = 'metal' | 'wood' | 'grate' | 'lino' | 'snow' | 'shingle';
@@ -166,7 +171,12 @@ export type PanelKind =
   | 'switches'
   | 'bridge3'
   | 'coil'
-  | 'hutKey';
+  | 'hutKey'
+  // Act 4
+  | 'chart'
+  | 'grapple'
+  | 'heave'
+  | 'ends';
 
 /** The surface area room scripts use to drive the game. Implemented by Game. */
 export interface GameAPI {

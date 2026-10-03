@@ -12,9 +12,11 @@ const root = process.env.E2E_ROOT ?? 'dist';
 const pagePath = process.env.E2E_PAGE ?? '';
 const scheme = process.env.E2E_SCHEME === 'tank' ? 'tank' : 'direct';
 // E2E_FROM=act2 skips the first act (sets its outcome directly) and starts at the furnace with the stone.
-// E2E_FROM=act3 starts the third act from its chapter state (E2E_PELL=1: with the operator; default alone).
+// E2E_FROM=act3 starts the third act from its chapter state (E2E_PELL=1: with the operator; default alone),
+// E2E_FROM=act4 the fourth (E2E_PELL=1: Pell answers from Bell Cove).
 const fromAct2 = process.env.E2E_FROM === 'act2';
 const fromAct3 = process.env.E2E_FROM === 'act3';
+const fromAct4 = process.env.E2E_FROM === 'act4';
 const port = 4800 + Math.floor(Math.random() * 500);
 const server = spawn('node', ['scripts/serve.mjs', root, String(port)], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 400));
@@ -222,8 +224,8 @@ const fight = async (maxMs = 30000) => {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     const st = await info();
-    // The thing at the cable hut cannot be cut down; the fight is with whatever walks.
-    const alive = st.creatures.filter((c) => c.state !== 'gone' && c.state !== 'dying' && c.id !== 'a3limb');
+    // The limbs (at the cable hut, over the bow) cannot be cut down; the fight is with whatever walks.
+    const alive = st.creatures.filter((c) => c.state !== 'gone' && c.state !== 'dying' && !c.id.includes('limb'));
     if (alive.length === 0) return true;
     if (st.hp <= 3) {
       const heal = st.inv.find((i) => i.startsWith('brandy') || i.startsWith('rum'));
@@ -248,10 +250,57 @@ const fight = async (maxMs = 30000) => {
   }
   return false;
 };
+// Shared by the third and fourth acts.
+const arrive3 = async (room) => {
+  // (Whoever is in the room may have something to say straight away: waitIdle pages through it.)
+  await page.waitForFunction((r) => window.__btk.info().room === r, room, { timeout: 10000 });
+  await waitIdle();
+};
+const clear3 = async (what) => {
+  await page.waitForTimeout(400);
+  if ((await info()).creatures.some((c) => c.state !== 'gone' && !c.id.includes('limb'))) await expect(await fight(60000), `won the fight: ${what}`);
+  await waitIdle();
+};
+const go3 = async (pts, fx, fz, room, what) => {
+  await expect(await T('path', pts, 0.25), what);
+  await T('face', fx, fz);
+  await T('act');
+  await arrive3(room);
+};
+const choose = async (label) => {
+  for (let i = 0; i < 40 && (await page.locator('#hud .msg .choices .btn').count()) === 0; i++) {
+    if (await page.evaluate(() => window.__t.msgOpen() && !window.__btk.game.ui.choiceNav)) await T('press', 'action');
+    await page.waitForTimeout(150);
+  }
+  const btn = page.locator('#hud .msg .choices .btn', { hasText: label }).first();
+  if (!(await btn.isVisible())) await fail(`no choice "${label}" offered`);
+  await btn.click();
+  return T('skip', 600);
+};
+const actAt = async (pts, fx, fz, what) => {
+  await expect(await T('path', pts, 0.2), what);
+  await T('face', fx, fz);
+  await T('act');
+};
+const openedPanel = async (sel) => {
+  for (let i = 0; i < 60 && (await page.locator(`#modal ${sel}`).count()) === 0; i++) {
+    if (await page.evaluate(() => window.__t.msgOpen())) await T('press', 'action');
+    if ((await page.locator('#modal .doc').count()) > 0) await closeDoc();
+    await page.waitForTimeout(120);
+  }
+  await page.waitForSelector(`#modal ${sel}`, { timeout: 5000 });
+};
+
 if (fromAct3) {
   await page.waitForTimeout(800);
   await page.evaluate((p) => void window.__btk.startChapter(3, p), process.env.E2E_PELL === '1');
   await playAct3(process.env.E2E_PELL === '1');
+  await finish();
+}
+if (fromAct4) {
+  await page.waitForTimeout(800);
+  await page.evaluate((p) => void window.__btk.startChapter(4, p), process.env.E2E_PELL === '1');
+  await playAct4(process.env.E2E_PELL === '1');
   await finish();
 }
 
@@ -633,7 +682,9 @@ const lockerMenu = async (side, label) => {
   await T('face', lockerX(side), 6.2);
   await T('act');
   for (let i = 0; i < 20 && (await page.locator('#hud .msg .choices .btn').count()) === 0; i++) await page.waitForTimeout(100);
-  await page.locator('#hud .msg .choices .btn', { hasText: label }).first().click();
+  const btn = page.locator('#hud .msg .choices .btn', { hasText: label }).first();
+  if (!(await btn.isVisible())) await fail(`no choice "${label}" offered`);
+  await btn.click();
   return T('skip', 600);
 };
 const mimicSide = pellSide === 'port' ? 'stbd' : 'port';
@@ -851,43 +902,6 @@ async function playAct3(pell) {
   await expect(st.inv.join() === 'lantern,telegram' && st.hp === 6 && !st.flags.act2, 'a fresh start: lantern, telegram, full health, the ship left behind');
   log(`ACT III (${pell ? 'with Pell' : 'alone'}): store combination ${String(st.flags['a3.combo']).padStart(3, '0')}`);
   await shot('act3-yard');
-
-  const arrive3 = async (room) => {
-    await page.waitForFunction((r) => window.__btk.info().room === r && !window.__btk.info().busy, room, { timeout: 10000 });
-    await waitIdle();
-  };
-  const clear3 = async (what) => {
-    await page.waitForTimeout(400);
-    if ((await info()).creatures.some((c) => c.state !== 'gone' && c.id !== 'a3limb')) await expect(await fight(60000), `won the fight: ${what}`);
-    await waitIdle();
-  };
-  const go3 = async (pts, fx, fz, room, what) => {
-    await expect(await T('path', pts, 0.25), what);
-    await T('face', fx, fz);
-    await T('act');
-    await arrive3(room);
-  };
-  const choose = async (label) => {
-    for (let i = 0; i < 40 && (await page.locator('#hud .msg .choices .btn').count()) === 0; i++) {
-      if (await page.evaluate(() => window.__t.msgOpen() && !window.__btk.game.ui.choiceNav)) await T('press', 'action');
-      await page.waitForTimeout(150);
-    }
-    await page.locator('#hud .msg .choices .btn', { hasText: label }).first().click();
-    return T('skip', 600);
-  };
-  const actAt = async (pts, fx, fz, what) => {
-    await expect(await T('path', pts, 0.2), what);
-    await T('face', fx, fz);
-    await T('act');
-  };
-  const openedPanel = async (sel) => {
-    for (let i = 0; i < 60 && (await page.locator(`#modal ${sel}`).count()) === 0; i++) {
-      if (await page.evaluate(() => window.__t.msgOpen())) await T('press', 'action');
-      if ((await page.locator('#modal .doc').count()) > 0) await closeDoc();
-      await page.waitForTimeout(120);
-    }
-    await page.waitForSelector(`#modal ${sel}`, { timeout: 5000 });
-  };
 
   // ---- the yard: the splitting axe on the chopping block
   await actAt([[-1, -4.0], [-3.3, 2.7]], -3.3, 3.6, 'walk to the chopping block');
@@ -1140,14 +1154,216 @@ async function playAct3(pell) {
   }
   st = await info();
   await expect(st.mode === 'ending' && st.flags['a3.done'] === true, 'the discharge reached the thing: the act ends');
-  for (let i = 0; i < 24 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(300);
-  }
+  // The third act's closing screen; the fourth act follows it.
+  await page.waitForSelector('#modal .story', { timeout: 10000 });
+  await page.waitForTimeout(1500);
   await shot('act3-ending');
   const endText = await page.locator('#modal .story').innerText();
   await expect(endText.includes('3막 끝') && endText.includes(pell ? 'BELL COVE RESUMES' : '세 번, 쉬고, 세 번'), 'the third act ending shown');
   log('ACT III ENDING reached. hp', st.hp, 'deaths', (await page.evaluate(() => window.__btk.state().deaths)));
+  await playAct4(pell);
+}
+
+// ------------------------------------------------------------------ Act IV: The Grapnel
+async function playAct4(pell) {
+  // The third act's closing screen and the fourth act's opening are story screens: page through them.
+  for (let i = 0; i < 160; i++) {
+    const st = await info();
+    if (st.mode === 'play' && st.room === 'sbdeck') break;
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  await waitIdle();
+  let st = await info();
+  await expect(st.room === 'sbdeck' && st.flags.act4 === true && st.flags['a4.pell'] === pell, 'the fourth act begins on the St Brendan');
+  await expect(st.inv.join() === `lantern,workOrder,${pell ? 'pellLetter' : 'bcWire'}` && st.hp === 6 && !st.flags.act3, 'a fresh start: lantern, the work order and word from Bell Cove');
+  log(`ACT IV (${pell ? 'Pell at Bell Cove' : 'alone'})`);
+  await shot('act4-deck');
+
+  // ---- the ship's axe from the fire cabinet, then the bosun at the dynamometer
+  await actAt([[-0.9, -7.75]], -0.9, -8.9, 'walk to the fire cabinet');
+  await waitIdle();
+  await expect((await info()).inv.includes('shipAxe'), 'took the ship’s axe');
+  await page.evaluate(() => window.__btk.game.equip('shipAxe'));
+  await actAt([[-2.4, -1.6], [-2.4, 5.4], [2.3, 5.5]], 1.5, 6.5, 'walk to the bosun');
+  for (let i = 0; i < 80 && (await page.locator('#modal .doc').count()) === 0; i++) {
+    if (await page.evaluate(() => window.__t.msgOpen())) await T('press', 'action');
+    await page.waitForTimeout(120);
+  }
+  await page.waitForSelector('#modal .doc', { timeout: 5000 });
+  await closeDoc();
+  await waitIdle();
+  await expect((await info()).inv.includes('grappleCard'), 'the bosun hands over his grappling rules');
+
+  // ---- the wheelhouse: the run laid off on the chart, current and all
+  await go3([[2.4, 2.0], [2.4, -4.0], [4.8, -7.6]], 4.8, -9, 'sbbridge', 'up the ladder to the wheelhouse');
+  await actAt([[1.0, 0.35]], 0, 0.85, 'walk to the captain');
+  await waitIdle();
+  await expect((await info()).flags['a4.captainMet'] === true, 'the captain explains the job');
+  await actAt([[-1.5, -0.3], [-3.75, -0.45]], -3.75, -1.9, 'walk to the chart table');
+  await openedPanel('canvas.chart-plot');
+  const chartRead = async () => page.locator('#modal .coil-status').innerText();
+  let chart = await chartRead();
+  await expect(chart.includes('침로 (뱃머리): 334°') && !/이루는 각: (8[4-9]|9\d)°/.test(chart), `square on the chart is not square over the ground: ${chart.split('\n').slice(2).join(' / ')}`);
+  for (let i = 0; i < 6; i++) await clickBtn('−5°');
+  chart = await chartRead();
+  log('run laid off:', chart.split('\n').join(' / '));
+  await expect(/실제 항적: 3[23]\d°/.test(chart) && /이루는 각: (8[4-9]|9\d)°/.test(chart), 'heading 304: the track made good crosses the cable square');
+  await shot('act4-chart');
+  await clickBtn('이 침로로 끈다');
+  await waitIdle();
+  st = await info();
+  await expect(st.flags['a4.runSet'] === true && st.flags['a4.heading'] === 304, 'the run is set: 304°');
+  await go3([[2.5, 0.2], [4.15, 0.6]], 5, 0.6, 'sbdeck', 'down to the deck');
+
+  // ---- the dynamometer: let the rocks go by, stop once the cable has lifted off the bottom
+  await actAt([[2.4, -4.0], [2.4, 5.4], [0.25, 5.95]], 0, 7.4, 'walk to the dynamometer');
+  await openedPanel('canvas.strain-plot');
+  await shot('act4-grapple');
+  let above = 0;
+  let peak = 0;
+  for (let i = 0; i < 1400; i++) {
+    const txt = await page.locator('#modal .bridge-read').first().innerText().catch(() => '');
+    const m = txt.match(/장력 ([\d.]+)톤/);
+    if (!m) break;
+    const v = Number(m[1]);
+    peak = Math.max(peak, v);
+    above = v >= 4.5 ? above + 1 : 0;
+    // A rock's spike is gone in a second; the cable holds the needle up.
+    if (above >= 20) {
+      log('stop the engines at', v, 't (peak so far', peak, 't)');
+      await clickBtn('기관 정지');
+      break;
+    }
+    await page.waitForTimeout(100);
+  }
+  await T('skip', 80);
+  await waitIdle();
+  st = await info();
+  await expect(st.flags['a4.hooked'] === true, `the cable is in the grapnel (attempt ${st.flags['a4.attempt']})`);
+
+  // ---- heave up: ease off as the bow lifts
+  await actAt([[2.4, 5.4], [2.4, 1.8], [0.9, 1.8]], 0, 2.6, 'walk to the picking-up gear');
+  await openedPanel('canvas.heave-plot');
+  const heaveAt = async () => page.evaluate(() => {
+    const c = document.querySelector('#modal canvas.heave-plot');
+    return c ? { t: Number(c.dataset.t ?? 0), p: Number(c.dataset.p ?? 0) } : null;
+  });
+  const tension = (v, t, p) => 4.2 * (1 - 0.35 * Math.min(1, p)) + 1.2 * Math.max(0, Math.sin((2 * Math.PI * t) / 7)) + 0.8 * v;
+  let cur = -1;
+  for (let i = 0; i < 2400; i++) {
+    const h = await heaveAt();
+    if (!h) break;
+    let want = 0;
+    for (const v of [2, 1]) {
+      let ok = true;
+      for (let a = 0; a <= 0.6; a += 0.1) if (tension(v, h.t + a, h.p) > 6.0) ok = false;
+      if (ok) {
+        want = v;
+        break;
+      }
+    }
+    if (want !== cur) {
+      await page.locator('#modal .btn', { hasText: ['정지', '천천히', '반속'][want] }).first().click();
+      cur = want;
+    }
+    if (i === 60) await shot('act4-heave');
+    await page.waitForTimeout(60);
+  }
+  await T('skip', 80);
+  await waitIdle();
+  await expect((await info()).flags['a4.raised'] === true, 'the bight comes up over the bow without parting');
+
+  // ---- cut it; the two ends go to the testing room
+  await actAt([[2.4, 2.0], [2.4, 8.6], [0.4, 10.1]], 0, 11.2, 'walk to the bow sheaves');
+  await choose('자르라고 한다');
+  await waitIdle();
+  await expect((await info()).flags['a4.cut'] === true, 'the bight is cut');
+  await go3([[2.4, 8.6], [2.4, 5.4], [-2.4, 5.4], [-2.4, -1.6], [-3.4, -7.6]], -3.4, -9, 'sbtest', 'to the testing room');
+  await waitIdle();
+  await actAt([[-1.6, 1.25]], -2.1, 1.25, 'walk to the desk');
+  await waitIdle();
+  await expect((await info()).inv.includes('brandy4'), 'took the flask from the desk');
+
+  // ---- the ends: resistance and a call down each, then the good one on the buoy
+  await actAt([[0.6, 2.0]], 0.6, 3.5, 'walk to the bench');
+  await openedPanel('.ends-grid');
+  const idle = () => page.waitForSelector('#modal .hut-status[data-busy="0"]', { timeout: 30000 });
+  const col = (i) => page.locator('#modal .ends-grid .cell').nth(i);
+  const ohms = [];
+  for (const i of [0, 1]) {
+    await col(i).click();
+    await clickBtn('저항 재기');
+    await idle();
+    ohms.push(Number((await col(i).innerText()).match(/([\d,.]+) Ω/)[1].replace(/,/g, '')));
+  }
+  const goodI = ohms[0] > ohms[1] ? 0 : 1;
+  const badI = 1 - goodI;
+  log('ends:', ohms.map((o, i) => `${'AB'[i]} ${o} Ω`).join(', '), '-> Bell Cove is', 'AB'[goodI]);
+  await expect(Math.abs(ohms[goodI] - 3.9 * 1035.4) < 2 && Math.abs(ohms[badI] - 3.9 * 0.8) < 0.1, 'one end runs a thousand miles to Bell Cove, the other earths at the fault');
+  for (const i of [badI, goodI]) {
+    await col(i).click();
+    await clickBtn('BC 부르기');
+    await idle();
+  }
+  const replies = [await col(0).innerText(), await col(1).innerText()];
+  log('replies:', replies.map((r) => r.split('\n').pop()).join(' | '));
+  await expect(replies[goodI].includes(pell ? '응답: R TP' : '응답: R BC') && replies[badI].includes('응답: J? R'), 'Bell Cove answers on its end; the other sends the call back reversed, and R');
+  await shot('act4-ends');
+  await col(badI).click();
+  await clickBtn('이 끝을 부표에');
+  await expect((await page.locator('#modal .hut-log').innerText()).includes('고장 난 끝이오'), 'Ross will not buoy the bad end');
+  await col(goodI).click();
+  await clickBtn('이 끝을 부표에');
+  await T('skip', 80);
+  await waitIdle();
+  st = await info();
+  await expect(st.flags['a4.buoyed'] === true && st.flags['a4.buoyEnd'] === goodI + 1, 'the Bell Cove end is on the buoy');
+
+  // ---- pick up the bad end: the root comes up with it
+  await go3([[0, 1.2], [0, 0.85]], 0, -0.5, 'sbdeck', 'back out on deck');
+  await actAt([[-2.4, -4.0], [-2.4, 1.8], [-0.9, 1.8]], 0, 2.6, 'walk to the picking-up gear');
+  await T('skip', 200);
+  for (let i = 0; i < 40 && (await info()).flags['a4.rootUp'] !== true; i++) await T('skip', 20);
+  await waitIdle();
+  await expect((await info()).flags['a4.rootUp'] === true, 'the root comes up over the bow');
+  await page.waitForTimeout(2500);
+  await shot('act4-root');
+  await clear3('the drowned on deck');
+  log('deck clear, hp', (await info()).hp);
+
+  // ---- cut the heart out (the limbs strike at anyone close: drink when hurt)
+  await expect(await T('path', [[2.4, 2.0], [2.4, 5.4], [0.9, 8.3], [0, 8.6]], 0.2), 'up to the root');
+  for (let i = 0; i < 16 && (await info()).flags['got:heart'] !== true; i++) {
+    st = await info();
+    if (st.hp <= 2 && st.inv.includes('brandy4')) {
+      await page.evaluate(() => void window.__btk.game.useItem('brandy4'));
+      await T('skip');
+    }
+    await T('face', 0, 10.1, 1500);
+    await T('press', 'attack');
+    await page.waitForTimeout(900);
+    await T('skip', 20);
+  }
+  await waitIdle();
+  st = await info();
+  await expect(st.flags['got:heart'] === true && st.inv.includes('heart'), `the heart is cut out (hp ${st.hp})`);
+  log('heart out, hp', st.hp);
+
+  // ---- into the fire
+  await go3([[0.9, 8.3], [2.4, 5.4], [2.4, -4.0], [2.2, -7.6]], 2.2, -9, 'sbstoke', 'down to the stokehold');
+  await actAt([[2.4, 2.3]], 2.4, 4.2, 'walk to the furnace');
+  for (let i = 0; i < 120 && (await info()).mode === 'play'; i++) await T('skip', 5);
+  st = await info();
+  await expect(st.mode === 'ending' && st.flags['a4.done'] === true, 'the heart burned: the end');
+  for (let i = 0; i < 30 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(300);
+  }
+  await shot('act4-ending');
+  const endText = await page.locator('#modal .story').innerText();
+  await expect(endText.includes(pell ? '두 사람의 증언' : '홀로 돌아오다') && endText.includes('플레이 시간'), 'the final ending shown');
+  log('FINAL ENDING reached. hp', st.hp, 'deaths', (await page.evaluate(() => window.__btk.state().deaths)));
 }
 
 async function finish() {

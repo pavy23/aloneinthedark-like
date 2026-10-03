@@ -218,7 +218,7 @@ async function landfall(g: GameAPI): Promise<void> {
     '검은 것이 숯처럼 갈라지며 파도 속으로 무너져 내렸다. 바다에서 올라오던 것들도 하나둘 쓰러진다.',
   );
   await g.wait(0.8);
-  await g.ending();
+  await g.nextAct();
 }
 
 /** Per-frame upkeep of the act: the candle burning down in the battery room. */

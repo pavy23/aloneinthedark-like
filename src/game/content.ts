@@ -187,6 +187,61 @@ export const ITEMS: Record<string, ItemDef> = {
     kind: 'heal',
     model: P.flask,
   },
+  // ---- Act 4
+  workOrder: {
+    id: 'workOrder',
+    name: '작업 지시서',
+    desc: '앨비언 대서양전신회사 기술부가 세인트 브렌던호에 내린 수리 작업 지시서.',
+    kind: 'doc',
+    doc: 'workOrder',
+    model: () => P.paperItem(M.paper),
+  },
+  grappleCard: {
+    id: 'grappleCard',
+    name: '그래플 수칙',
+    desc: '갑판장이 권양기 옆에 붙여 둔 수칙 카드. 기름 묻은 손자국이 잔뜩 묻어 있다.',
+    kind: 'doc',
+    doc: 'grappleCard',
+    model: () => P.paperItem(M.paper),
+  },
+  pellLetter: {
+    id: 'pellLetter',
+    name: '펠의 편지',
+    desc: '출항 전날 벨 코브에서 온 편지. 낯익은 손글씨다.',
+    kind: 'doc',
+    doc: 'pellLetter',
+    model: () => P.paperItem(M.paper),
+  },
+  bcWire: {
+    id: 'bcWire',
+    name: '벨 코브의 전보',
+    desc: '출항 전날 벨 코브 양륙국에서 온 전보.',
+    kind: 'doc',
+    doc: 'bcWire',
+    model: () => P.paperItem(M.paper),
+  },
+  shipAxe: {
+    id: 'shipAxe',
+    name: '소방 도끼',
+    desc: '갑판실 소화 설비함에 걸려 있던 도끼. 날이 새것처럼 반짝인다.',
+    kind: 'weapon',
+    weapon: { id: 'shipAxe', damage: 2, range: 1.35, hitAt: 0.42, duration: 0.9 },
+    model: P.axeItem,
+  },
+  brandy4: {
+    id: 'brandy4',
+    name: '브랜디 플라스크',
+    desc: '전기기사가 서랍에 넣어 둔 술병. "추운 밤용"이라는 쪽지가 붙어 있다. (체력 회복)',
+    kind: 'heal',
+    model: P.flask,
+  },
+  heart: {
+    id: 'heart',
+    name: '검은 심장',
+    desc: '뿌리 한가운데에서 도려낸 것. 탈라사호의 검은 돌과 같은 재질이지만, 사람 머리만 하다. 손안에서 느리게, 아주 느리게 뛴다.',
+    kind: 'quest',
+    model: P.idol,
+  },
   swHandle: {
     id: 'swHandle',
     name: '⑤번 스위치 손잡이',
@@ -376,6 +431,41 @@ export const DOCS: Record<string, DocDef> = {
     style: 'hand',
     pages: [
       `유도 코일 — 5피트\n1차 24볼트, 단속기 부착. 2차는 2천 볼트쯤 된다고들 한다.\n\n1858년 8월, 첫 대서양 케이블. 신호가 약하자 전기기사 화이트하우스는 이런 코일로 높은 전압을 걸었다. 3주 뒤 케이블은 죽었다. 사람들은 그의 코일이 케이블을 태웠다고 한다. 케이블이 처음부터 부실했다는 말도 있다.\n\n— 이번에는 그 일을 일부러 하려는 것이다. R.K.`,
+    ],
+  },
+  // ---- Act 4
+  workOrder: {
+    id: 'workOrder',
+    title: '작업 지시서 — C.S. 세인트 브렌던호',
+    style: 'typed',
+    pages: [
+      `앨비언 대서양전신회사 기술부 · 1926년 4월\n\n고장 위치: 벨 코브 기점 1,036.2해리. 벨 코브와 캐리긴 양쪽에서 잰 값이 일치함. 작년 10월 탈라사호의 수리 구간.\n수심 약 2,100길. 절연이 날마다 떨어지고 있음.\n\n1. 고장점에서 벨 코브 쪽으로 1해리쯤 떨어진 곳에서 그래플로 케이블을 건져 올린다.\n2. 끊어서 두 끝을 시험한다. 육지국까지 성한 끝은 봉해서 표지 부표에 단다.\n3. 고장 난 끝을 끌어올려 상한 구간을 잘라 낸다.\n4. 새 케이블을 이어 부표의 끝까지 가져가 마무리 접속한다.`,
+      `(아래 손글씨)\n\n조사관이 동승함. 탈라사호 보고서를 쓴 사람이다. 그가 하는 말은 귀담아들을 것.\n상한 구간에서 무엇이 올라오든, 배에 두지 말 것.\n\n— 기술부장`,
+    ],
+  },
+  grappleCard: {
+    id: 'grappleCard',
+    title: '그래플 수칙 — 갑판장 스톤',
+    style: 'hand',
+    pages: [
+      `· 케이블과 직각으로, 아주 느리게 끈다. 느릴수록 잘 문다.\n· 뱃머리가 가리키는 쪽과 배가 실제로 지나가는 쪽은 다르다. 조류를 셈에 넣을 것.\n\n· 장력계를 본다. 바닥에 끌릴 때 바늘은 3톤 언저리.\n  바위에 걸리면 바늘이 확 치솟았다가 떨어진다.\n  케이블을 물면 바늘이 꾸준히 오른다.\n\n· 확실히 물었으면 몇 분 더 끌어 케이블을 바닥에서 띄운 뒤, 기관을 멈추고 감는다.\n  바늘이 4톤 반을 넘어 버티면 뜬 것이다. 그보다 일찍 멈추면 올라오다 빠진다.\n  5톤을 넘겨 계속 끌면 끊어진다.`,
+      `감아올리기\n\n· 너울이 뱃머리를 들어 올릴 때 장력이 확 뛴다. 그때는 늦추거나 멈춘다.\n· 뱃머리가 내려앉을 때 감는다.\n· 6톤을 넘기지 말 것. 바이트(케이블이 접혀 매달린 것)가 끊어지면 처음부터 다시다.`,
+    ],
+  },
+  pellLetter: {
+    id: 'pellLetter',
+    title: '펠의 편지',
+    style: 'hand',
+    pages: [
+      `조사관님께.\n\n나는 바다에 다시 나가지 않겠다고 했고, 그 약속은 지키겠소. 대신 벨 코브의 회선 끝에 앉아 있겠소.\n\n배가 케이블을 끊어 두 끝을 시험할 때, 육지국 쪽 끝에서 대답하는 것은 나요. 내 손은 아실 거요. R 다음에 TP를 칠 테니.\n거꾸로 된 대답이 오면 — 그쪽 끝에 놈이 있소.\n\n불을 꺼뜨리지 마시오.\n\n— T. 펠, 벨 코브에서`,
+    ],
+  },
+  bcWire: {
+    id: 'bcWire',
+    title: '전보 — 벨 코브 양륙국',
+    style: 'typed',
+    pages: [
+      `세인트 브렌던호 귀하\n\n새 야간 근무자가 부임했음. 고장점은 벨 코브 기점 1,036.2해리로 확인됨.\n\n케이블을 끊어 끝을 시험할 때, 이쪽은 R BC로 답함. 다른 대답이 오면 그 끝은 육지국으로 이어진 끝이 아님.\n\n— 벨 코브`,
     ],
   },
 };
