@@ -22,13 +22,14 @@ import { openSafePanel, openDynamoPanel, openRadioPanel } from '../ui/panels';
 import { openBridgePanel, openCablePanel, openValvePanel } from '../ui/panels2';
 import { openBridge3Panel, openCoilPanel, openComboPanel, openHutKeyPanel, openRackPanel, openSwitchPanel, openTapePanel } from '../ui/panels3';
 import { openChartPanel, openEndsPanel, openGrapplePanel, openHeavePanel } from '../ui/panels4';
+import { openInquiryPanel } from '../ui/panels5';
 import * as Screens from '../ui/screens';
 import { TouchControls } from '../ui/Touch';
 import { FollowCam } from './FollowCam';
 import { basisFromView, MoveLatch } from './controls';
 import { beginAct2Flags, startAct2 } from './act2';
 import { rackSgs, tickAct3 } from './act3';
-import { beforeTheFurnace, hookState, landfallState } from './chapters';
+import { beforeTheFurnace, hookState, inquiryState, landfallState } from './chapters';
 
 type Mode = 'boot' | 'title' | 'play' | 'ending';
 
@@ -978,6 +979,7 @@ export class Game implements GameAPI {
       grapple: openGrapplePanel,
       heave: openHeavePanel,
       ends: openEndsPanel,
+      inquiry: openInquiryPanel,
     }[kind];
     await this.guard(open(this));
   }
@@ -1003,8 +1005,9 @@ export class Game implements GameAPI {
     // Burning the stone stills the first act's dead for good; the second act's ("a2…") come for the rest,
     // until the cable is let go and the sea takes them all back. At Bell Cove only the third act's ("a3…")
     // walk, until the discharge reaches the thing.
-    // Aboard the St Brendan only the fourth act's ("a4…"), until the heart is burned.
+    // Aboard the St Brendan only the fourth act's ("a4…"), until the heart is burned. Nothing in London.
     if (this.flag(`dead:${s.id}`)) return;
+    if (this.flag('epilogue')) return;
     if (this.flag('act4')) {
       if (!s.id.startsWith('a4') || this.flag('a4.done')) return;
     } else if (this.flag('act3') ? !s.id.startsWith('a3') || this.flag('a3.done') : this.flag('cableFreed') || (this.flag('idolBurned') && !s.id.startsWith('a2'))) return;
@@ -1052,8 +1055,17 @@ export class Game implements GameAPI {
 
   async nextAct(): Promise<void> {
     if (this.mode !== 'play' || this.dead) return;
-    // The fourth act is the last: it ends the game.
+    // The epilogue ends with the committee's ruling.
+    if (this.flag('epilogue')) {
+      this.mode = 'ending';
+      this.clearCreatures();
+      this.audio.setDanger(false);
+      await Screens.playVerdict(this);
+      return;
+    }
+    // The fourth act ends the story; its last screen offers the epilogue.
     if (this.flag('act4')) {
+      noteProgress(5, this.flag('a4.pell'));
       await this.ending();
       return;
     }
@@ -1087,8 +1099,12 @@ export class Game implements GameAPI {
     this.clearCreatures();
     this.resetTransient();
     this.visitedCaption.clear();
-    if (act >= 4) {
+    if (act >= 5) {
       // Like a new game: the autosave is only replaced at the first door.
+      await this.beginInquiry(inquiryState(pell), false);
+      return;
+    }
+    if (act === 4) {
       await this.beginHook(hookState(pell), false);
       return;
     }
@@ -1145,6 +1161,28 @@ export class Game implements GameAPI {
     await this.enterRoom('sbdeck', 'start', { caption: false, autosave });
     this.renderer.fade = 0;
     this.chapter('4막 · 갈고리', 'ACT IV · THE GRAPNEL');
+  }
+
+  /** From the last ending screen: on to the committee in London, carrying on the same game. */
+  async continueToEpilogue(): Promise<void> {
+    await this.beginInquiry(inquiryState(this.flag('a4.pell'), this.state), true);
+  }
+
+  /** London: the epilogue's opening screen, then the committee room. */
+  private async beginInquiry(s: GameState, autosave: boolean): Promise<void> {
+    this.ui.closeAll();
+    this.clearCreatures();
+    this.resetTransient();
+    this.state = s;
+    this.visitedCaption.clear();
+    noteProgress(5, s.flags['ep.pell'] === true);
+    this.pl.setWeapon(null, null);
+    await this.guard(Screens.playInquiryIntro(this, s.flags['ep.pell'] === true));
+    this.mode = 'play';
+    this.pl.object.visible = true;
+    await this.enterRoom('inquiry', 'door', { caption: false, autosave });
+    this.renderer.fade = 0;
+    this.chapter('에필로그 · 조사위원회', 'EPILOGUE · THE INQUIRY');
   }
 
   hasPower(): boolean {
@@ -1294,5 +1332,7 @@ function captionSub(id: RoomId): string {
       return 'TESTING ROOM';
     case 'sbstoke':
       return 'STOKEHOLD';
+    case 'inquiry':
+      return 'LONDON · COMMITTEE ROOM';
   }
 }

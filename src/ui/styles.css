@@ -387,6 +387,11 @@ body {
   opacity: 0;
   transition: opacity 1.2s ease;
 }
+/* A long screen (the committee's ruling) scrolls instead of losing its first lines above the top edge. */
+.modal > .story {
+  max-height: 100%;
+  overflow-y: auto;
+}
 .story .line.show {
   opacity: 1;
 }
@@ -993,4 +998,48 @@ kbd {
 .ends-grid .cell .no {
   font-family: var(--font-label);
   letter-spacing: 0.15em;
+}
+
+/* Epilogue: the dossier at the witness stand */
+.panel.inquiry .inquiry-q {
+  color: #f3e3b8;
+  margin: 0.2em 0 0.4em;
+  line-height: 1.6;
+}
+.panel.inquiry .muted {
+  font-size: 0.8em;
+  margin: 0.2em 0 0.4em;
+}
+.dossier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 34vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+.dossier-list .grp {
+  font-family: var(--font-label);
+  color: var(--brass-dim);
+  letter-spacing: 0.12em;
+  font-size: 0.75em;
+  margin: 0.5em 0 0.1em;
+}
+.dossier-list .btn {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.4em;
+  text-align: left;
+  font-size: 0.86em;
+  padding: 0.25em 0.6em;
+}
+.dossier-list .btn .read {
+  margin-left: auto;
+  color: var(--verdigris);
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+.dossier-preview {
+  font-size: 0.85em;
+  min-height: 4.6em;
 }

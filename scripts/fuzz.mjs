@@ -52,6 +52,14 @@ const act4Sets = [
   { ...a4, 'a4.pell': true, 'a4.seed': 41, 'a4.bosunMet': true, 'a4.runSet': true, 'a4.hooked': true, 'a4.raised': true, 'a4.cut': true, 'a4.buoyed': true, 'a4.pickup': true, 'a4.rootUp': true },
 ];
 const ACT4_ROOMS = ['sbdeck', 'sbbridge', 'sbtest', 'sbstoke'];
+// The epilogue (the committee room): before the hearing, alone and with Pell's statement, and broken off
+// at the fourth point.
+const ep = { epilogue: true, power: true, 'ep.ok': 0, 'ep.answer': -1 };
+const epSets = [
+  { ...ep, 'ep.pell': false, 'ep.q': 0 },
+  { ...ep, 'ep.pell': true, 'ep.q': 0, 'ep.arrived': true },
+  { ...ep, 'ep.pell': true, 'ep.q': 3, 'ep.ok': 5, 'ep.arrived': true, 'ep.started': true },
+];
 // Every combination of control scheme and camera gets some rooms.
 const schemes = [
   ['direct', 'follow'],
@@ -60,8 +68,8 @@ const schemes = [
   ['tank', 'follow'],
 ];
 let stuck = 0;
-for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', ...ACT3_ROOMS, ...ACT4_ROOMS].entries()) {
-  const sets = ACT3_ROOMS.includes(room) ? act3Sets : ACT4_ROOMS.includes(room) ? act4Sets : flagSets;
+for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', ...ACT3_ROOMS, ...ACT4_ROOMS, 'inquiry'].entries()) {
+  const sets = ACT3_ROOMS.includes(room) ? act3Sets : ACT4_ROOMS.includes(room) ? act4Sets : room === 'inquiry' ? epSets : flagSets;
   const flags = sets[Math.floor(rnd() * sets.length)];
   const [controls, camera] = schemes[ri % schemes.length];
   await page.evaluate(([r, f, controls, camera]) => {
@@ -69,7 +77,7 @@ for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engin
     b.game.applySettings({ ...b.game.settings, controls, camera });
     b.game.state.flags = { ...f };
     b.game.state.time = 0;
-    for (const i of ['crowbar', 'axe', 'cabinKey', 'crank', 'brandy1', 'idol', 'testKey', 'brakeKey', 'rum', 'woodAxe', 'hydrometer', 'candle', 'codeCard', 'swHandle', 'rum3', 'brandy3', 'shipAxe', 'grappleCard', 'brandy4', 'heart']) if (Math.random() < 0.5) b.give(i);
+    for (const i of ['crowbar', 'axe', 'cabinKey', 'crank', 'brandy1', 'idol', 'testKey', 'brakeKey', 'rum', 'woodAxe', 'hydrometer', 'candle', 'codeCard', 'swHandle', 'rum3', 'brandy3', 'shipAxe', 'grappleCard', 'brandy4', 'heart', 'dossier']) if (Math.random() < 0.5) b.give(i);
     return b.play(r);
   }, [room, flags, controls, camera]);
   const t0 = Date.now();

@@ -136,12 +136,14 @@ export class HumanRig {
     box(this.head, c.skin, 0, hs * 0.55, 0.01, hs * 0.85, hs * 1.15, hs);
     box(this.head, c.hair, 0, hs * 0.72, -0.03, hs * 0.9, hs * 0.75, hs * 0.85); // hair at back/top
     box(this.head, c.skin, 0, hs * 0.45, hs * 0.52, hs * 0.14, hs * 0.2, hs * 0.12); // nose
+    // Eyes stand just proud of the face (whose front is at 0.01 + hs / 2), or the head box hides them.
+    const eyeZ = 0.01 + hs * 0.5 + 0.004;
     if (c.eyes !== undefined) {
-      box(this.head, c.eyes, -hs * 0.2, hs * 0.66, hs * 0.51, hs * 0.14, hs * 0.08, 0.01, c.eyes);
-      box(this.head, c.eyes, hs * 0.2, hs * 0.66, hs * 0.51, hs * 0.14, hs * 0.08, 0.01, c.eyes);
+      box(this.head, c.eyes, -hs * 0.2, hs * 0.66, eyeZ, hs * 0.14, hs * 0.08, 0.01, c.eyes);
+      box(this.head, c.eyes, hs * 0.2, hs * 0.66, eyeZ, hs * 0.14, hs * 0.08, 0.01, c.eyes);
     } else {
-      box(this.head, 0x1a1410, -hs * 0.2, hs * 0.66, hs * 0.505, hs * 0.12, hs * 0.05, 0.01);
-      box(this.head, 0x1a1410, hs * 0.2, hs * 0.66, hs * 0.505, hs * 0.12, hs * 0.05, 0.01);
+      box(this.head, 0x1a1410, -hs * 0.2, hs * 0.66, eyeZ, hs * 0.12, hs * 0.05, 0.01);
+      box(this.head, 0x1a1410, hs * 0.2, hs * 0.66, eyeZ, hs * 0.12, hs * 0.05, 0.01);
     }
     if (spec.hat) {
       const brim = new THREE.Mesh(new THREE.CylinderGeometry(hs * 0.95, hs * 0.95, 0.02, 10), flat(c.hat ?? 0x33291e));

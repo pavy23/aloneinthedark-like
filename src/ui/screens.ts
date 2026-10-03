@@ -3,6 +3,7 @@ import { latestSave, readProgress, readSlot, formatTime, type Settings, type Slo
 import { ROOMS } from '../world/rooms';
 import { FocusNav, type Modal } from './UI';
 import { button, h } from './dom';
+import { established, verdict } from '../game/logic5';
 
 // ------------------------------------------------------------------ Title
 
@@ -73,6 +74,7 @@ function openChapters(g: Game, title: Modal): void {
     [2, '2막 · 선수창 아래', '같은 밤 · 선수'],
     [3, '3막 · 뭍으로', '1926년 2월 · 벨 코브 양륙국'],
     [4, '4막 · 갈고리', '1926년 4월 · 수리선 세인트 브렌던호'],
+    [5, '에필로그 · 조사위원회', '1926년 6월 · 런던'],
   ];
   const list = h(
     'div',
@@ -80,7 +82,7 @@ function openChapters(g: Game, title: Modal): void {
     ...acts.map(([n, name, when]) => button(`${name} — ${when}`, () => void start(n), { disabled: n > p.act })),
     button('돌아가기', () => g.ui.pop(modal)),
   );
-  const note = p.act >= 3 ? `3·4막은 2막 끝의 선택을 따릅니다: ${p.pell ? '펠과 함께 내려왔다' : '혼자 내려왔다'}.` : '도달한 막부터 다시 시작할 수 있습니다.';
+  const note = p.act >= 3 ? `3막부터는 2막 끝의 선택을 따릅니다: ${p.pell ? '펠과 함께 내려왔다' : '혼자 내려왔다'}.` : '도달한 막부터 다시 시작할 수 있습니다.';
   const el = h('div', { class: 'modal' }, h('div', { class: 'panel', style: 'width:min(520px,100%)' }, h('div', { class: 'eyebrow', text: 'CHAPTERS · 막 선택' }), h('p', { class: 'muted', text: note }), list));
   const nav = new FocusNav(list, g.audio);
   const modal = g.ui.push({ el, nav });
@@ -287,7 +289,87 @@ export async function playEnding(g: Game): Promise<void> {
           ]),
       stats,
     ],
-    { finalButtons: [['타이틀로', () => g.showTitle()]], bg: 'rgba(8,10,12,0.96)' },
+    {
+      finalButtons: [
+        ['에필로그 · 조사위원회로', () => void g.continueToEpilogue()],
+        ['타이틀로', () => g.showTitle()],
+      ],
+      bg: 'rgba(8,10,12,0.96)',
+    },
+  );
+}
+
+/** The epilogue's opening: London, June 1926. */
+export async function playInquiryIntro(g: Game, withPell: boolean): Promise<void> {
+  g.audio.setAmbience('interior');
+  await story(
+    g,
+    '1926년 6월 14일 · 런던',
+    [
+      '세인트 브렌던호가 돌아오고 한 달 뒤, 그레이브센드 해상보험조합에서 편지가 왔다. 탈라사호의 보험금 청구를 심리하는 위원회를 연다고.',
+      '증인은 조합의 조사관. 나다.',
+      withPell
+        ? '펠은 오지 않았다. 다시는 바다를 건너지 않겠다는 맹세를 지켜, 대신 벨 코브에서 케이블로 진술서를 보내왔다.'
+        : '펠은 탈라사호에 두고 왔다. 내 말을 대신 증언해 줄 사람은 없다.',
+      '서류철에는 탈라사호에서 세인트 브렌던호까지, 반년 동안 모은 기록이 들어 있다. 항해일지, 일기, 편지, 전보. 그 가운데 무엇을 내밀지는 내가 정한다.',
+    ],
+    { bg: 'rgba(10,9,8,0.96)' },
+  );
+}
+
+/** The committee's ruling, point by point, and how the investigator answered the last question. */
+export async function playVerdict(g: Game): Promise<void> {
+  g.audio.setDanger(false);
+  g.audio.setAmbience('title');
+  const st = g.state;
+  const mask = g.num('ep.ok');
+  const ok = established(mask);
+  const v = verdict(mask);
+  const withPell = g.flag('ep.pell');
+  const answer = Math.max(0, g.num('ep.answer'));
+  const stats = `플레이 시간 ${formatTime(st.time)} · 기록 ${st.saves}회 · 죽음 ${st.deaths}회 · 읽은 문서 ${st.docs.length}편`;
+  const ruling = [
+    ok.has('cause') ? '근인 — 수심 2,300길에서 그래플에 걸려 올라온 것. 바다의 우연한 사고로 본다.' : '근인 — 입증되지 않았다.',
+    ok.has('crew') ? '선원 — 선원들은 손해가 시작된 뒤에 떠났다. 지급을 막지 않는다.' : '선원 — 비행 여부는 판단하지 않는다.',
+    ok.has('flooding') ? '2번 탱크 — 선장이 연 것이 아니다.' : '2번 탱크 — 고의 침수의 의혹이 남는다.',
+    v.cable
+      ? '케이블 — 선장의 지시로, 위험한 때에, 배를 지키려고 놓아 보냈다. 공동해손 희생으로 인정한다.'
+      : ok.has('authority') && ok.has('peril')
+        ? // The sacrifice is made out, but the insurer answers for it only against a peril insured against (s.66(6)).
+          '케이블 — 희생은 인정하나, 피하려던 위험이 보험이 담보한 위험인지는 입증되지 않았다.'
+        : '케이블 — 공동해손으로 볼 근거가 모자란다.',
+    v.testimony ? '증언 — 전문을 의사록에 첨부한다.' : '증언 — 조사관 개인의 소견으로만 남긴다.',
+  ].join('\n');
+  const payment =
+    v.payment === 'full'
+      ? '보험금은 전액 지급한다.'
+      : v.payment === 'part'
+        ? v.hull
+          ? '보험금은 선체와 기관의 손해만 지급한다. 케이블은 지급하지 않는다.'
+          : '보험금은 공동해손으로 인정한 케이블만 지급한다.'
+        : '보험금은 근인이 입증될 때까지 지급을 보류한다.';
+  const said = [
+    '나는 바다의 위험이었다고 답했다. 의장은 고개를 끄덕이고 의사록에 적었다. 우연한 해난. 법이 아는 말 가운데 그것에 가장 가까운 말이었다.',
+    v.testimony
+      ? '나는 그것이 살아 있었다고, 그리고 지금은 불에 탔다고 답했다. 의장은 한참 펜을 들고 있다가, 증언 전문을 봉인해 의사록과 함께 금고에 넣으라고 일렀다.'
+      : '나는 그것이 살아 있었다고, 그리고 지금은 불에 탔다고 답했다. 서기는 그 말을 적지 않았다.',
+    '나는 모른다고 답했다. 그것이 진실이었다. 의장은 펜을 내려놓았다.',
+  ][Math.min(2, answer)];
+  await story(
+    g,
+    '1926년 6월 14일 · 런던, 그레이브센드 해상보험조합',
+    [
+      `몰리 의장이 판정문을 읽었다. 인정된 쟁점 ${v.score} / 6.`,
+      ruling,
+      payment,
+      said,
+      withPell
+        ? '그날 저녁 회사의 케이블 사무소에 들러 벨 코브를 불렀다. R. 곧바로 답이 왔다. R, 그리고 TP. 메아리는 오지 않았다.'
+        : '건물을 나서자 6월의 런던은 시끄러웠다. 나는 한참 서서 들었다. 세 번, 쉬고, 세 번은 — 오지 않았다.',
+      `— 에필로그 · ${['우연한 해난', v.testimony ? '봉인된 증언' : '적히지 않은 증언', '모른다는 대답'][Math.min(2, answer)]} —`,
+      stats,
+    ],
+    { finalButtons: [['타이틀로', () => g.showTitle()]], bg: 'rgba(10,9,8,0.96)' },
   );
 }
 

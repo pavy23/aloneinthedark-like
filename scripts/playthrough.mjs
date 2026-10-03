@@ -1,5 +1,6 @@
 // End-to-end playthrough in headless Chromium: plays the whole game from the title screen to the ending
-// through the real input path (virtual buttons), the real UI (DOM clicks) and the real puzzles.
+// and on through the epilogue's ruling, through the real input path (virtual buttons), the real UI (DOM
+// clicks) and the real puzzles.
 // Usage: npm run build && node scripts/playthrough.mjs
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -13,10 +14,11 @@ const pagePath = process.env.E2E_PAGE ?? '';
 const scheme = process.env.E2E_SCHEME === 'tank' ? 'tank' : 'direct';
 // E2E_FROM=act2 skips the first act (sets its outcome directly) and starts at the furnace with the stone.
 // E2E_FROM=act3 starts the third act from its chapter state (E2E_PELL=1: with the operator; default alone),
-// E2E_FROM=act4 the fourth (E2E_PELL=1: Pell answers from Bell Cove).
+// E2E_FROM=act4 the fourth (E2E_PELL=1: Pell answers from Bell Cove), E2E_FROM=epilogue the inquiry in London.
 const fromAct2 = process.env.E2E_FROM === 'act2';
 const fromAct3 = process.env.E2E_FROM === 'act3';
 const fromAct4 = process.env.E2E_FROM === 'act4';
+const fromEpilogue = process.env.E2E_FROM === 'epilogue';
 const port = 4800 + Math.floor(Math.random() * 500);
 const server = spawn('node', ['scripts/serve.mjs', root, String(port)], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 400));
@@ -301,6 +303,12 @@ if (fromAct4) {
   await page.waitForTimeout(800);
   await page.evaluate((p) => void window.__btk.startChapter(4, p), process.env.E2E_PELL === '1');
   await playAct4(process.env.E2E_PELL === '1');
+  await finish();
+}
+if (fromEpilogue) {
+  await page.waitForTimeout(800);
+  await page.evaluate((p) => void window.__btk.startChapter(5, p), process.env.E2E_PELL === '1');
+  await playEpilogue(process.env.E2E_PELL === '1');
   await finish();
 }
 
@@ -1382,6 +1390,59 @@ async function playAct4(pell) {
   const endText = await page.locator('#modal .story').innerText();
   await expect(endText.includes(pell ? '두 사람의 증언' : '홀로 돌아오다') && endText.includes('플레이 시간'), 'the final ending shown');
   log('FINAL ENDING reached. hp', st.hp, 'deaths', (await page.evaluate(() => window.__btk.state().deaths)));
+  // The last screen offers the epilogue.
+  await clickBtn('에필로그', '#modal .story');
+  await playEpilogue(pell);
+}
+
+// ------------------------------------------------------------------ Epilogue: The Inquiry
+async function playEpilogue(pell) {
+  for (let i = 0; i < 80; i++) {
+    const st = await info();
+    if (st.mode === 'play' && st.room === 'inquiry') break;
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  await waitIdle();
+  let st = await info();
+  await expect(st.room === 'inquiry' && st.flags.epilogue === true && st.flags['ep.pell'] === pell && st.inv.join() === 'dossier', 'the epilogue begins in the committee room, the dossier in hand');
+  log(`EPILOGUE (${pell ? 'Pell testifies by cable' : 'alone'})`);
+  await shot('ep-room');
+  await actAt([[-1.2, 2.0], [0, 2.85]], 0, 7, 'walk to the witness stand');
+  // Each point: the exhibit that settles it (the first one is answered wrongly once, to hear the hint).
+  const answers = [
+    ['항해일지 (찢겨 나온 한 장)'],
+    ['C.S. 탈라사 공식 항해일지'],
+    ['선장 아서 헤일의 마지막 편지'],
+    ['선장 아서 헤일의 마지막 편지'],
+    ['갑판장 J. 도노번의 수첩'],
+    [pell ? '진술서 — 토머스 펠' : '작업 지시서 — C.S. 세인트 브렌던호'],
+  ];
+  answers[0].unshift('그레이브센드 해상보험조합 — 조사 의뢰서');
+  for (const [q, picks] of answers.entries()) {
+    for (const title of picks) {
+      await openedPanel('.dossier-list');
+      const eyebrow = await page.locator('#modal .panel.inquiry .eyebrow').innerText();
+      await expect(eyebrow.includes(`${q + 1} / 6`), `point ${q + 1} in hand (${eyebrow})`);
+      if (q === 0 && title === picks[picks.length - 1]) await shot('ep-dossier');
+      await page.locator('#modal .dossier-list .btn', { hasText: title }).first().click();
+      await clickBtn('이 기록을 낸다');
+      await page.waitForSelector('#modal .dossier-list', { state: 'detached', timeout: 5000 });
+    }
+    log(`point ${q + 1}: ${picks[picks.length - 1]}`);
+  }
+  await choose('바다의 위험이었습니다');
+  for (let i = 0; i < 60 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(300);
+  }
+  await shot('ep-verdict');
+  st = await info();
+  const text = await page.locator('#modal .story').innerText();
+  await expect(st.flags['ep.done'] === true && st.flags['ep.ok'] === 63, `all six points established (mask ${st.flags['ep.ok']})`);
+  await expect(text.includes('인정된 쟁점 6 / 6') && text.includes('보험금은 전액 지급한다') && text.includes('우연한 해난'), 'the ruling: paid in full, a fortuitous accident of the seas');
+  await expect(text.includes(pell ? 'R, 그리고 TP' : '세 번, 쉬고, 세 번은'), 'the last words follow Pell');
+  log('EPILOGUE ENDING reached.');
 }
 
 async function finish() {

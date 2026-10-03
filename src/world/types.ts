@@ -24,7 +24,9 @@ export type RoomId =
   | 'sbdeck'
   | 'sbbridge'
   | 'sbtest'
-  | 'sbstoke';
+  | 'sbstoke'
+  // Epilogue: the underwriters' committee room in London
+  | 'inquiry';
 
 export type AmbienceId = 'deck' | 'interior' | 'engine' | 'hold' | 'bridge' | 'snow' | 'shore' | 'station' | 'none';
 export type Surface = 'metal' | 'wood' | 'grate' | 'lino' | 'snow' | 'shingle';
@@ -176,7 +178,9 @@ export type PanelKind =
   | 'chart'
   | 'grapple'
   | 'heave'
-  | 'ends';
+  | 'ends'
+  // Epilogue
+  | 'inquiry';
 
 /** The surface area room scripts use to drive the game. Implemented by Game. */
 export interface GameAPI {

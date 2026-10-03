@@ -1,5 +1,5 @@
 // Side-path scenarios: water hammer ambush, death -> game over -> retry, manual save/continue, phone layout,
-// camera coverage, control schemes, and the wrong turns of the second, third and fourth acts.
+// camera coverage, control schemes, the wrong turns of the second, third and fourth acts, and of the hearing.
 // Usage: npm run build && node scripts/scenarios.mjs   (SCEN=8,9 runs only those sections)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -214,10 +214,11 @@ if (run(5)) {
 // ---------------------------------------------------------------- 6. every reachable spot is covered by a camera
 if (run(6)) {
   const page = await open();
-  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach', 'sbdeck', 'sbbridge', 'sbtest', 'sbstoke']) {
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach', 'sbdeck', 'sbbridge', 'sbtest', 'sbstoke', 'inquiry']) {
     if (room === 'fcsle') await page.evaluate(() => window.__btk.setFlags({ idolBurned: true, act2: true, pellFreed: true, tank2Drained: true, tank2Open: true }));
     // The St Brendan as she is at the end, the buoy over the side and the root up on the bow.
     if (room === 'sbdeck') await page.evaluate(() => window.__btk.setFlags({ act4: true, power: true, 'a4.seed': 3, 'a4.buoyed': true, 'a4.pickup': true, 'a4.rootUp': true }));
+    if (room === 'inquiry') await page.evaluate(() => window.__btk.setFlags({ epilogue: true, 'ep.arrived': true }));
     await page.evaluate((r) => window.__btk.play(r), room);
     await page.waitForTimeout(150);
     const res = await page.evaluate(() => {
@@ -331,7 +332,9 @@ if (run(7)) {
 
   // (c) Wherever he walks, the follow camera never ends up behind a wall, outside the room or in a doorway.
   await page.evaluate(() => window.__btk.setFlags({ idolBurned: true, act2: true, pellFreed: true, tank2Drained: true, tank2Open: true, 'a2.captainRose': true, 'dead:a2captain': true }));
-  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach']) {
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach', 'sbdeck', 'sbbridge', 'sbtest', 'sbstoke', 'inquiry']) {
+    if (room === 'sbdeck') await page.evaluate(() => window.__btk.setFlags({ act4: true, power: true, 'a4.seed': 3, 'a4.deckIntro': true }));
+    if (room === 'inquiry') await page.evaluate(() => window.__btk.setFlags({ epilogue: true, 'ep.arrived': true }));
     await page.evaluate((r) => window.__btk.play(r), room);
     await page.waitForTimeout(150);
     const res = await page.evaluate(async () => {
@@ -981,6 +984,166 @@ if (run(10)) {
   }
   f = (await info(page)).flags;
   check((await info(page)).room === 'sbdeck' && f.act4 === true && f['a4.pell'] === true && (await info(page)).inv.includes('pellLetter'), 'starting the fourth act from the title (Pell at Bell Cove, his letter in hand)');
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 11. the hearing's wrong turns
+if (run(11)) {
+  const page = await open();
+  await page.evaluate(() => localStorage.clear());
+  const settle = async () => {
+    for (let i = 0; i < 80; i++) {
+      await page.evaluate(() => window.__btk.game.ui.clearMessages());
+      const s = await info(page);
+      if (!s.busy) return;
+      await page.waitForTimeout(100);
+    }
+  };
+  const use = async () => {
+    for (let k = 0; k < 2; k++) {
+      await page.waitForTimeout(250);
+      await page.evaluate(() => window.__btk.game.input.setTouch('action', true));
+      await page.waitForTimeout(120);
+      await page.evaluate(() => window.__btk.game.input.setTouch('action', false));
+      for (let i = 0; i < 15; i++) {
+        const s = await info(page);
+        if (s.busy || s.ui) return;
+        await page.waitForTimeout(100);
+      }
+    }
+  };
+  // Page through what is said until `sel` is on screen ('choice': until a choice is offered, null: until
+  // the talking stops); returns the lines heard.
+  const until = async (sel, ms = 20000) => {
+    const seen = [];
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      const [open, text, choice] = await page.evaluate(() => {
+        const ui = window.__btk.game.ui;
+        return [!ui.msgEl.hidden, ui.msgText.textContent, !!ui.choiceNav];
+      });
+      if (open && seen.at(-1) !== text) seen.push(text);
+      if (sel === 'choice' ? choice : sel ? (await page.locator(sel).count()) > 0 : !open && !(await info(page)).busy) return seen;
+      if (open && !choice) await page.keyboard.press('Space');
+      await page.waitForTimeout(120);
+    }
+    return seen;
+  };
+  const DOSSIER = '#modal .dossier-list';
+  const eyebrow = () => page.locator('#modal .panel.inquiry .eyebrow').innerText();
+  const present = async (title) => {
+    await page.locator(`${DOSSIER} .btn`, { hasText: title }).first().click();
+    await page.locator('#modal .btn', { hasText: '이 기록을 낸다' }).click();
+    await page.waitForSelector(DOSSIER, { state: 'detached', timeout: 5000 });
+  };
+  const ep = (extra = {}) =>
+    page.evaluate((extra) => {
+      const g = window.__btk.game;
+      g.state.flags = {};
+      g.state.inv = ['dossier'];
+      window.__btk.setFlags({ epilogue: true, power: true, 'ep.pell': false, 'ep.q': 0, 'ep.ok': 0, 'ep.answer': -1, 'ep.arrived': true, ...extra });
+    }, extra);
+
+  // (a) The door is kept until the committee has ruled.
+  await ep();
+  await page.evaluate(() => window.__btk.play('inquiry', -3.5, 1.0, Math.PI));
+  await settle();
+  await use();
+  let lines = await until(null);
+  check(lines.some((l) => l.includes('나가실 수 없습니다')), 'the door during the hearing: the porter keeps it');
+
+  // (b) The first point answered without an exhibit: unproven in the minutes, and on to the next.
+  await ep();
+  await page.evaluate(() => window.__btk.play('inquiry', 0, 2.85, 0));
+  await settle();
+  await use();
+  lines = await until(DOSSIER);
+  check(lines.some((l) => l.includes('앨비언 대서양전신회사가')) && lines.some((l) => l.includes('첫째, 근인이오')), 'taking the stand: the chairman opens the hearing and asks the first point');
+  await page.locator('#modal .btn', { hasText: '증거 없이 답한다' }).click();
+  await page.waitForSelector(DOSSIER, { state: 'detached', timeout: 5000 });
+  lines = await until(DOSSIER);
+  let f = (await info(page)).flags;
+  check(lines.some((l) => l.includes('서류 없이 답했다')) && lines.some((l) => l.includes('근인은 입증되지 않음')) && f['ep.q'] === 1 && f['ep.ok'] === 0, 'no exhibit for the cause: unproven, on to the crew');
+
+  // (c) Two records that do not answer the crew point: a hint after the first, unproven after the second.
+  check((await eyebrow()).includes('2 / 6'), 'the crew point in hand');
+  await present('조사 의뢰서');
+  lines = await until(DOSSIER);
+  check(lines.some((l) => l.includes('우리가 귀하에게 보낸 의뢰서')) && lines.some((l) => l.includes('그 순서를 보여 주시오')), 'the wrong record for the crew: the solicitor scoffs, the chairman hints');
+  await present('사이펀 기록지 판독 요령');
+  lines = await until(DOSSIER);
+  f = (await info(page)).flags;
+  check(lines.some((l) => l.includes('모스 부호표')) && lines.some((l) => l.includes('비행 여부는 판단하지 않음')) && f['ep.q'] === 2 && f['ep.ok'] === 0, 'a second wrong record: the crew point goes unproven');
+
+  // (d) Stepping back from the stand mid-hearing, a save and a reload: the hearing picks up where it was.
+  check((await eyebrow()).includes('3 / 6'), 'the flooding point in hand');
+  await page.locator('#modal .btn', { hasText: '물러나기' }).click();
+  await until('choice');
+  await page.locator('#hud .msg .choices .btn', { hasText: '잠시 서류를 정리한다' }).click();
+  await settle();
+  f = (await info(page)).flags;
+  check(!(await info(page)).ui && f['ep.q'] === 2 && f['ep.done'] !== true, 'stepping back: the hearing waits at the third point');
+  const auto = await page.evaluate(() => JSON.parse(localStorage.getItem('btk.save.auto.v1') ?? 'null'));
+  check(auto?.room === 'inquiry' && auto.flags['ep.q'] === 2, `the autosave keeps up with the hearing (no doors to pass in the committee room): point ${auto?.flags?.['ep.q']}`);
+  await page.evaluate(() => window.__btk.game.save(false));
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(900);
+  await page.locator('#modal .title .btn', { hasText: '이어하기' }).click();
+  for (let i = 0; i < 40 && (await info(page)).room !== 'inquiry'; i++) await page.waitForTimeout(200);
+  await settle();
+  await page.waitForTimeout(600);
+  const hint = await page.locator('#hud .hint').innerText().catch(() => '');
+  check(hint.includes('심문 계속'), `back at the stand after a reload (${hint.replace(/\s+/g, ' ')})`);
+  // (Opening the dossier from the inventory at the stand takes the stand too.)
+  await page.evaluate(() => void window.__btk.game.useItem('dossier'));
+  lines = await until(DOSSIER);
+  check(!lines.some((l) => l.includes('앨비언 대서양전신회사가')) && lines.some((l) => l.includes('2번 케이블 탱크는')) && (await eyebrow()).includes('3 / 6'), 'the hearing resumes at the flooding point, without the opening again');
+
+  // (e) The rest settled, the cause still open, and "I don't know" for the minutes: payment withheld.
+  const rest = ['선장 아서 헤일의 마지막 편지', '선장 아서 헤일의 마지막 편지', '베일의 측정 기록', '전보 — 앨비언 대서양전신회사 기술부'];
+  for (const [i, title] of rest.entries()) {
+    await present(title);
+    lines = await until(i < rest.length - 1 ? DOSSIER : 'choice');
+  }
+  check(lines.some((l) => l.includes('의사록에 근인을 적어야')), 'the last question: what goes in the minutes as the cause');
+  await page.locator('#hud .msg .choices .btn', { hasText: '모르겠습니다' }).click();
+  for (let i = 0; i < 80 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  const ruling = await page.locator('#modal .story').innerText();
+  f = (await info(page)).flags;
+  check(f['ep.done'] === true && f['ep.answer'] === 2 && f['ep.ok'] === 4 + 8 + 16 + 32, `four points established, not the cause or the crew (mask ${f['ep.ok']})`);
+  check(ruling.includes('인정된 쟁점 4 / 6') && ruling.includes('지급을 보류') && ruling.includes('보험이 담보한 위험인지는 입증되지 않았다'), 'the ruling: the cable sacrificed but the peril not shown to be insured; payment withheld');
+  check(ruling.includes('모른다는 대답') && ruling.includes('세 번, 쉬고'), 'the last words: "I don\'t know", alone');
+  await page.screenshot({ path: '.shots/scen/11-verdict-withheld.png' });
+
+  // (f) The chapter select offers the epilogue only once the fourth act is done.
+  await page.evaluate(() => localStorage.setItem('btk.progress.v1', JSON.stringify({ act: 4, pell: false })));
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(900);
+  await page.locator('#modal .title .btn', { hasText: '막 선택' }).click();
+  await page.waitForSelector('#modal .panel .eyebrow:has-text("CHAPTERS")');
+  let epi = page.locator('#modal .btn', { hasText: '에필로그 · 조사위원회' });
+  check((await epi.count()) === 1 && (await epi.isDisabled()), 'chapter select: the epilogue is locked before the fourth act is done');
+  await page.evaluate(() => localStorage.setItem('btk.progress.v1', JSON.stringify({ act: 5, pell: false })));
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(900);
+  await page.locator('#modal .title .btn', { hasText: '막 선택' }).click();
+  await page.waitForSelector('#modal .panel .eyebrow:has-text("CHAPTERS")');
+  epi = page.locator('#modal .btn', { hasText: '에필로그 · 조사위원회' });
+  check(!(await epi.isDisabled()), 'chapter select: the epilogue once the fourth act is done');
+  await epi.click();
+  for (let i = 0; i < 60 && (await info(page)).room !== 'inquiry'; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  lines = await until(null);
+  const st = await info(page);
+  check(st.room === 'inquiry' && st.flags.epilogue === true && st.flags['ep.pell'] === false && st.inv.join() === 'dossier' && lines.some((l) => l.includes('증인석으로 오시오')), 'starting the epilogue from the title: the committee room, the dossier, called to the stand');
   await page.close();
 }
 

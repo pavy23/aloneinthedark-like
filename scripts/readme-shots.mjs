@@ -110,5 +110,34 @@ await scene('root', 'sbdeck', 0.9, 6.4, -0.24, { ...act4, 'a4.runSet': true, 'a4
   await page.evaluate(() => window.__btk.game.cutTo({ id: 'x', pos: [2.8, 2.4, 5.6], look: [-0.3, 1.0, 10.4], fov: 58, zones: [] }));
   await page.waitForTimeout(2200);
 });
+// The epilogue: the committee room, the chairman's first question, and the dossier at the witness stand.
+const ep = { epilogue: true, power: true, 'ep.pell': true, 'ep.q': 0, 'ep.ok': 0, 'ep.answer': -1, 'ep.arrived': true };
+await scene('inquiry', 'inquiry', -0.9, 2.5, 0.35, ep, async () => {
+  await page.evaluate(() => window.__btk.game.cutTo({ id: 'x', pos: [-2.9, 2.2, 1.0], look: [0.4, 1.0, 6.4], fov: 56, zones: [] }));
+  await page.waitForTimeout(300);
+});
+await scene('hearing', 'inquiry', 0, 2.85, 0, { ...ep, 'ep.started': true }, async () => {
+  await page.evaluate(() => {
+    const g = window.__btk.game;
+    g.cutTo({ id: 'x', pos: [0.4, 1.45, 4.7], look: [0.0, 1.0, 7.1], fov: 44, zones: [] });
+    void g.say('몰리 의장: "첫째, 근인이오. 10월 3일, 탈라사호는 대서양 한가운데서 케이블 고장을 고치고 있었소. 그날 무슨 일이 있었는지 기록으로 보여 주시오."');
+  });
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(400);
+});
+await page.setViewportSize({ width: 960, height: 720 });
+await scene('dossier', 'inquiry', 0, 2.85, 0, { ...ep, 'ep.started': true }, async () => {
+  await page.evaluate(() => {
+    const g = window.__btk.game;
+    g.state.docs = ['commission', 'logPage', 'captainLog', 'diary', 'wirelessLog', 'engineerNotes', 'letter', 'testRecord', 'bosunNotes', 'testManual', 'baleNote', 'haleLetter', 'telegram', 'stationDiary', 'codeCard', 'workOrder', 'grappleCard', 'pellLetter'];
+    g.cutTo({ id: 'x', pos: [1.7, 1.95, 2.3], look: [-1.7, 1.05, 6.6], fov: 52, zones: [] });
+    void g.openPanel('inquiry');
+  });
+  await page.waitForTimeout(400);
+  await page.locator('#modal .dossier-list .btn', { hasText: '항해일지 (찢겨 나온 한 장)' }).click();
+  await page.waitForTimeout(400);
+});
+await page.setViewportSize({ width: 640, height: 480 });
 await browser.close();
 server.kill();

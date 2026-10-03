@@ -1,6 +1,7 @@
 import { MAX_HP, newState, type GameState } from './state';
 import { act3Flags } from './act3';
 import { act4Flags } from './act4';
+import { epilogueFlags } from './epilogue';
 
 // Where each act starts. The title screen's chapter select, the debug API and the automated playthroughs
 // all start an act from these definitions.
@@ -81,5 +82,26 @@ export function hookState(pell: boolean, prev?: GameState): GameState {
   s.inv = ['lantern', 'workOrder', pell ? 'pellLetter' : 'bcWire'];
   s.equipped = null;
   s.flags = act4Flags(pell, s.time);
+  return s;
+}
+
+/**
+ * The epilogue: June 1926, the underwriters' committee room in London. Only the tallies carry over, and
+ * whether Pell came ashore (he testifies by cable from Bell Cove).
+ */
+export function inquiryState(pell: boolean, prev?: GameState): GameState {
+  const s = newState();
+  if (prev) {
+    s.time = prev.time;
+    s.saves = prev.saves;
+    s.deaths = prev.deaths;
+    s.docs = [...prev.docs];
+  }
+  s.room = 'inquiry';
+  s.spawn = 'door';
+  s.hp = MAX_HP;
+  s.inv = ['dossier'];
+  s.equipped = null;
+  s.flags = epilogueFlags(pell);
   return s;
 }
