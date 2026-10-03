@@ -13,18 +13,21 @@ import { josa } from '../core/josa';
 import { buildRoom, LightPool, type PushState, type RoomInstance } from './World';
 import { disposeTree } from '../world/RoomBuilder';
 import { ITEMS } from './content';
-import { MAX_HP, formatTime, latestSave, newState, parseState, readSettings, readSlot, writeSettings, writeSlot, type GameState, type Settings, type SlotId } from './state';
+import { MAX_HP, formatTime, latestSave, newState, noteProgress, parseState, readSettings, readSlot, writeSettings, writeSlot, type GameState, type Settings, type SlotId } from './state';
 import { ROOMS } from '../world/rooms';
-import type { ChoiceOption, CreatureSpawn, GameAPI, Interactable, RoomId } from '../world/types';
+import type { ChoiceOption, CreatureSpawn, GameAPI, Interactable, PanelKind, RoomId } from '../world/types';
 import { openInventory } from '../ui/Inventory';
 import { openDoc } from '../ui/DocReader';
 import { openSafePanel, openDynamoPanel, openRadioPanel } from '../ui/panels';
 import { openBridgePanel, openCablePanel, openValvePanel } from '../ui/panels2';
+import { openBridge3Panel, openCoilPanel, openComboPanel, openHutKeyPanel, openRackPanel, openSwitchPanel, openTapePanel } from '../ui/panels3';
 import * as Screens from '../ui/screens';
 import { TouchControls } from '../ui/Touch';
 import { FollowCam } from './FollowCam';
 import { basisFromView, MoveLatch } from './controls';
-import { beginAct2Flags } from './act2';
+import { beginAct2Flags, startAct2 } from './act2';
+import { rackSgs, tickAct3 } from './act3';
+import { beforeTheFurnace, landfallState } from './chapters';
 
 type Mode = 'boot' | 'title' | 'play' | 'ending';
 
@@ -454,6 +457,7 @@ export class Game implements GameAPI {
     this.updateHint();
     this.lights.update(this.gameTime);
     room.def.update?.(this, room, dt, this.gameTime);
+    if (this.flag('act3')) tickAct3(this);
     this.state.x = this.pl.x;
     this.state.z = this.pl.z;
     this.state.h = this.pl.heading;
@@ -797,7 +801,7 @@ export class Game implements GameAPI {
     if (this.dead || !c.active) return;
     const d = Math.hypot(c.x - this.pl.x, c.z - this.pl.z);
     const a = Math.abs(angleDiff(c.heading, Math.atan2(this.pl.x - c.x, this.pl.z - c.z)));
-    if (d > 1.3 || a > 1.1) return;
+    if (d > c.reach || a > 1.1) return;
     this.state.hp -= c.strength;
     this.pl.hurt(c.x, c.z);
     this.audio.sfx('hurt');
@@ -954,7 +958,7 @@ export class Game implements GameAPI {
     return this.guard(new Promise((resolve) => this.waits.push({ t: seconds, resolve })));
   }
 
-  async openPanel(kind: 'safe' | 'dynamo' | 'radio' | 'bridge' | 'valves' | 'cableEngine'): Promise<void> {
+  async openPanel(kind: PanelKind): Promise<void> {
     const open = {
       safe: openSafePanel,
       dynamo: openDynamoPanel,
@@ -962,6 +966,13 @@ export class Game implements GameAPI {
       bridge: openBridgePanel,
       valves: openValvePanel,
       cableEngine: openCablePanel,
+      tape: openTapePanel,
+      combo: openComboPanel,
+      rack: openRackPanel,
+      switches: openSwitchPanel,
+      bridge3: openBridge3Panel,
+      coil: openCoilPanel,
+      hutKey: openHutKeyPanel,
     }[kind];
     await this.guard(open(this));
   }
@@ -985,8 +996,10 @@ export class Game implements GameAPI {
 
   spawnCreature(s: CreatureSpawn): void {
     // Burning the stone stills the first act's dead for good; the second act's ("a2…") come for the rest,
-    // until the cable is let go and the sea takes them all back.
-    if (this.flag(`dead:${s.id}`) || this.flag('cableFreed') || (this.flag('idolBurned') && !s.id.startsWith('a2'))) return;
+    // until the cable is let go and the sea takes them all back. At Bell Cove only the third act's ("a3…")
+    // walk, until the discharge reaches the thing.
+    if (this.flag(`dead:${s.id}`)) return;
+    if (this.flag('act3') ? !s.id.startsWith('a3') || this.flag('a3.done') : this.flag('cableFreed') || (this.flag('idolBurned') && !s.id.startsWith('a2'))) return;
     if (this.creatures.some((c) => c.id === s.id && c.state !== 'gone')) return;
     const events = {
       onStrike: (cr: Creature) => this.creatureStrike(cr),
@@ -1027,6 +1040,71 @@ export class Game implements GameAPI {
     this.mode = 'ending';
     this.clearCreatures();
     await Screens.playEnding(this);
+  }
+
+  async nextAct(): Promise<void> {
+    if (this.mode !== 'play' || this.dead) return;
+    // The third act is the last one there is (for now): it ends the game.
+    if (this.flag('act3')) {
+      await this.ending();
+      return;
+    }
+    // The end of the second act: down the Jacob's ladder, the interlude, then Bell Cove.
+    this.mode = 'ending';
+    this.clearCreatures();
+    this.audio.setDanger(false);
+    const pell = this.flag('pellCarried');
+    noteProgress(3, pell);
+    // (Guarded: loading a game or going back to the title meanwhile cancels the move to the next act.)
+    await this.guard(Screens.playInterlude(this, pell));
+    // Carrying on the same game: save straight away at Bell Cove.
+    await this.beginLandfall(landfallState(pell, this.state), true);
+  }
+
+  /** Start an act from its defined starting state (title screen chapter select, debug, tests). */
+  async startChapter(act: number, pell = false): Promise<void> {
+    this.audio.unlock();
+    this.ui.closeAll();
+    this.clearCreatures();
+    this.resetTransient();
+    this.visitedCaption.clear();
+    if (act >= 3) {
+      // Like a new game: the autosave is only replaced at the first door.
+      await this.beginLandfall(landfallState(pell), false);
+      return;
+    }
+    if (act === 2) {
+      // Just after the stone went into the furnace.
+      const s = beforeTheFurnace();
+      s.inv = s.inv.filter((i) => i !== 'idol');
+      s.flags.idolBurned = true;
+      this.state = s;
+      this.mode = 'play';
+      this.pl.object.visible = true;
+      this.pl.setWeapon(s.equipped, s.equipped ? (ITEMS[s.equipped]?.weapon ?? null) : null);
+      await this.enterRoom('engine', s.spawn, { caption: true, autosave: false, pos: { x: s.x, z: s.z, h: s.h } });
+      this.renderer.fade = 0;
+      void this.run(() => startAct2(this));
+      return;
+    }
+    await this.newGame();
+  }
+
+  /** Bell Cove: the third act's opening screen, then the station yard. */
+  private async beginLandfall(s: GameState, autosave: boolean): Promise<void> {
+    this.ui.closeAll();
+    this.clearCreatures();
+    this.resetTransient();
+    this.state = s;
+    this.visitedCaption.clear();
+    noteProgress(3, s.flags['a3.pell'] === true);
+    this.pl.setWeapon(null, null);
+    await this.guard(Screens.playLandfallIntro(this, s.flags['a3.pell'] === true));
+    this.mode = 'play';
+    this.pl.object.visible = true;
+    await this.enterRoom('station', 'arrive', { caption: false, autosave });
+    this.renderer.fade = 0;
+    this.chapter('3막 · 뭍으로', 'ACT III · LANDFALL');
   }
 
   hasPower(): boolean {
@@ -1101,6 +1179,9 @@ export class Game implements GameAPI {
         this.camIndex = -1;
         this.updateCamera(0, true);
       },
+      startChapter: (act: number, pell = false) => this.startChapter(act, pell),
+      /** Specific gravities of the third act's sixteen cells (for tests). */
+      rack: () => rackSgs(this),
       setFlags: (f: Record<string, boolean | number>) => {
         Object.assign(this.state.flags, f);
         this.refreshLights();
@@ -1157,5 +1238,13 @@ function captionSub(id: RoomId): string {
       return 'TESTING ROOM';
     case 'tank2':
       return 'CABLE TANK No.2';
+    case 'station':
+      return 'BELL COVE · STATION YARD';
+    case 'opsroom':
+      return 'OPERATING ROOM';
+    case 'battery':
+      return 'BATTERY & TESTING ROOM';
+    case 'beach':
+      return 'THE CABLE HUT';
   }
 }

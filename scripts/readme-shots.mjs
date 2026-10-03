@@ -69,5 +69,27 @@ await scene('tank2', 'tank2', 2.55, -0.55, -Math.PI / 2 - 0.25, { ...act2, tank2
   // Close enough to the cone: the master gets up.
   await page.waitForTimeout(2600);
 }, 'follow');
+// The third act.
+const act3 = { act3: true, 'a3.pell': true, 'a3.t0': 0, 'a3.seed': 1234, 'a3.combo': 472, 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true, 'a3.arrived': true, 'a3.opsSeen': true, 'a3.beachSeen': true, 'a3.limbSeen': true };
+await scene('station', 'station', 0.6, -3.6, 0.12, act3, undefined, 'follow');
+await page.setViewportSize({ width: 960, height: 720 });
+await scene('tape', 'opsroom', 0.6, 4.4, 0, { ...act3, 'a3.tapeSeen': true, 'a3.clerkUp': true, 'dead:a3clerk': true, 'a3.tapeMemo': true }, async () => {
+  await page.evaluate(() => {
+    window.__btk.give('codeCard');
+    void window.__btk.game.openPanel('tape');
+  });
+  await page.waitForTimeout(500);
+  // Wind the tape on to the figures.
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(3400);
+  await page.keyboard.up('ArrowRight');
+  await page.waitForTimeout(400);
+});
+await page.setViewportSize({ width: 640, height: 480 });
+// Along the shore from the west, so the hut does not hide what comes up where the cable goes into the sea.
+await scene('beach', 'beach', -3.4, 5.2, 1.24, { ...act3, 'a3.pellReady': true, 'a3.handle': true }, async () => {
+  await page.evaluate(() => window.__btk.game.cutTo({ id: 'x', pos: [-4.4, 1.9, 2.9], look: [2.6, 2.6, 7.1], fov: 58, zones: [] }));
+  await page.waitForTimeout(3600);
+}, 'follow');
 await browser.close();
 server.kill();

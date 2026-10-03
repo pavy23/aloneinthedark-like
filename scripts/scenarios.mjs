@@ -1,5 +1,6 @@
-// Side-path scenarios: water hammer ambush, death -> game over -> retry, manual save/continue, phone layout.
-// Usage: npm run build && node scripts/scenarios.mjs
+// Side-path scenarios: water hammer ambush, death -> game over -> retry, manual save/continue, phone layout,
+// camera coverage, control schemes, and the wrong turns of the second and third acts.
+// Usage: npm run build && node scripts/scenarios.mjs   (SCEN=8,9 runs only those sections)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
@@ -14,6 +15,8 @@ const browser = await chromium.launch({
 });
 const errors = [];
 let failed = false;
+const ONLY = process.env.SCEN ? process.env.SCEN.split(',') : null;
+const run = (n) => !ONLY || ONLY.includes(String(n));
 const check = (cond, msg) => {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`);
   if (!cond) failed = true;
@@ -34,7 +37,7 @@ async function open(opts = {}) {
 const info = (page) => page.evaluate(() => window.__btk.info());
 
 // ---------------------------------------------------------------- 1. water hammer brings a creature up
-{
+if (run(1)) {
   const page = await open();
   await page.evaluate(() => localStorage.clear());
   await page.evaluate(() => window.__btk.play('engine', 4.3, 1.4, Math.PI / 2));
@@ -79,7 +82,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 }
 
 // ---------------------------------------------------------------- 3. manual save -> title -> continue
-{
+if (run(3)) {
   const page = await open();
   await page.evaluate(() => window.__btk.play('cabin', 0.5, 1.5, 0));
   await page.evaluate(() => {
@@ -102,7 +105,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 }
 
 // ---------------------------------------------------------------- 4. phone portrait layout with touch controls
-{
+if (run(4)) {
   const page = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   await page.screenshot({ path: '.shots/scen/4-phone-title.png' });
   await page.evaluate(() => window.__btk.play('corridor', -2.5, 0, Math.PI / 2));
@@ -127,7 +130,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 }
 
 // ---------------------------------------------------------------- 5. review regressions
-{
+if (run(5)) {
   const page = await open();
   // (a) Let the cable go first, then send SOS and walk away from the set while the reply is coming in.
   await page.evaluate(() => window.__btk.play('radio', 0.3, 1.45, 0));
@@ -161,7 +164,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   }
   check((await info(page)).mode === 'ending', 'the Jacob’s ladder at dawn ends the night');
   const ending = await page.locator('#modal .story').innerText();
-  check(ending.includes('엔딩 1'), 'without Pell it is ending 1');
+  check(ending.includes('2막 끝') && ending.includes('생존자 없음'), 'without Pell the second act closes alone (the interlude)');
 
   // (b) Drinking brandy while standing next to scenery works.
   await page.evaluate(() => window.__btk.play('bridge', 0, 0.75, 0));
@@ -209,9 +212,9 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 }
 
 // ---------------------------------------------------------------- 6. every reachable spot is covered by a camera
-{
+if (run(6)) {
   const page = await open();
-  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2']) {
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach']) {
     if (room === 'fcsle') await page.evaluate(() => window.__btk.setFlags({ idolBurned: true, act2: true, pellFreed: true, tank2Drained: true, tank2Open: true }));
     await page.evaluate((r) => window.__btk.play(r), room);
     await page.waitForTimeout(150);
@@ -259,7 +262,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 }
 
 // ---------------------------------------------------------------- 7. control schemes and the follow camera
-{
+if (run(7)) {
   const page = await open();
   const hold = async (key, ms) => {
     await page.keyboard.down(key);
@@ -326,7 +329,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 
   // (c) Wherever he walks, the follow camera never ends up behind a wall, outside the room or in a doorway.
   await page.evaluate(() => window.__btk.setFlags({ idolBurned: true, act2: true, pellFreed: true, tank2Drained: true, tank2Open: true, 'a2.captainRose': true, 'dead:a2captain': true }));
-  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2']) {
+  for (const room of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach']) {
     await page.evaluate((r) => window.__btk.play(r), room);
     await page.waitForTimeout(150);
     const res = await page.evaluate(async () => {
@@ -408,7 +411,7 @@ const info = (page) => page.evaluate(() => window.__btk.info());
 }
 
 // ---------------------------------------------------------------- 8. the second act's wrong turns
-{
+if (run(8)) {
   const page = await open();
   await page.evaluate(() => localStorage.clear());
   const settle = async () => {
@@ -533,14 +536,23 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   await page.keyboard.press('Space');
   await page.locator('#hud .msg .choices .btn', { hasText: '두고 내려간다' }).click();
   for (let i = 0; i < 40 && (await info(page)).mode !== 'ending'; i++) await page.waitForTimeout(200);
-  for (let i = 0; i < 20 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
+  for (let i = 0; i < 20 && !(await page.locator('#modal .story').innerText().catch(() => '')).includes('2막 끝'); i++) {
     await page.keyboard.press('Space');
     await page.waitForTimeout(300);
   }
-  check((await page.locator('#modal .story').innerText()).includes('엔딩 1'), 'leaving him behind is ending 1');
+  check((await page.locator('#modal .story').innerText()).includes('생존자 없음'), 'leaving him behind: the second act ends alone');
+  // On into the third act, alone.
+  for (let i = 0; i < 60 && (await info(page)).room !== 'station'; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  s = await info(page);
+  check(s.room === 'station' && s.mode === 'play' && s.flags.act3 === true && s.flags['a3.pell'] === false, 'the third act follows: Bell Cove, alone');
+  const prog = await page.evaluate(() => JSON.parse(localStorage.getItem('btk.progress.v1') ?? '{}'));
+  check(prog.act === 3 && prog.pell === false, `progress remembered for the chapter select (${JSON.stringify(prog)})`);
   await page.close();
 }
-{
+if (run(8)) {
   // (e) The thing's climb runs on play time, so a save and reload does not reset it; (f) a save from
   // before the second act existed opens it.
   const page = await open();
@@ -575,6 +587,222 @@ const info = (page) => page.evaluate(() => window.__btk.info());
   await page.waitForTimeout(1500);
   const f = (await info(page)).flags;
   check(f.act2 === true && f['vc.sea'] === true && typeof f['a2.t0'] === 'number', 'an old save with the stone burned opens the second act');
+  await page.close();
+}
+
+// ---------------------------------------------------------------- 9. the third act's wrong turns
+if (run(9)) {
+  const page = await open();
+  await page.evaluate(() => localStorage.clear());
+  const settle = async () => {
+    for (let i = 0; i < 80; i++) {
+      await page.evaluate(() => window.__btk.game.ui.clearMessages());
+      const s = await info(page);
+      if (!s.busy) return;
+      await page.waitForTimeout(100);
+    }
+  };
+  // Advance dialogue, collecting what is said (frames are slow under software GL: wait for it to start).
+  const hear = async (ms = 8000) => {
+    const seen = [];
+    for (let i = 0; i < 30; i++) {
+      const s = await info(page);
+      if (s.busy || s.ui) break;
+      await page.waitForTimeout(100);
+    }
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      const [open, text] = await page.evaluate(() => [!window.__btk.game.ui.msgEl.hidden, window.__btk.game.ui.msgText.textContent]);
+      if (open) {
+        if (seen.at(-1) !== text) seen.push(text);
+        await page.keyboard.press('Space');
+      } else if (!(await info(page)).busy) {
+        await page.waitForTimeout(200);
+        if (!(await info(page)).busy && !(await page.evaluate(() => !window.__btk.game.ui.msgEl.hidden))) return seen;
+      }
+      await page.waitForTimeout(120);
+    }
+    return seen;
+  };
+  // Use the thing in front of me (through the virtual button, and again if nothing started).
+  const use = async () => {
+    for (let k = 0; k < 2; k++) {
+      await page.waitForTimeout(250);
+      await page.evaluate(() => window.__btk.game.input.setTouch('action', true));
+      await page.waitForTimeout(120);
+      await page.evaluate(() => window.__btk.game.input.setTouch('action', false));
+      for (let i = 0; i < 15; i++) {
+        const s = await info(page);
+        if (s.busy || s.ui) return;
+        await page.waitForTimeout(100);
+      }
+    }
+  };
+  const act3 = (extra = {}) =>
+    page.evaluate((extra) => {
+      const g = window.__btk.game;
+      g.state.flags = {};
+      window.__btk.setFlags({
+        act3: true, 'a3.pell': false, 'a3.t0': g.playTime, 'a3.seed': 77, 'a3.combo': 472,
+        'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true, 'sw.bridge': false, 'sw.coil': false,
+        'a3.batteryOpen': true, 'a3.coilSeen': true, 'a3.batteryLook': true, 'a3.boardSeen': true, 'a3.opsSeen': true, 'a3.beachSeen': true,
+        ...extra,
+      });
+    }, extra);
+  const sgs = await page.evaluate(() => {
+    const g = window.__btk.game;
+    g.state.flags['a3.seed'] = 77;
+    return window.__btk.rack();
+  });
+  const good = sgs.map((v, i) => (v >= 1.25 ? i : -1)).filter((i) => i >= 0);
+  const weak = sgs.findIndex((v) => v < 1.25);
+  const mask = (cells) => cells.reduce((m, i) => m | (1 << i), 0);
+
+  // (a) The bridge on the line with the condenser still in series reads an open circuit.
+  await act3({ 'sw.bridge': true });
+  await page.evaluate(() => window.__btk.play('battery', -1.4, 1.35, Math.PI));
+  await settle();
+  await page.evaluate(() => void window.__btk.game.openPanel('bridge3'));
+  await page.waitForSelector('#modal .galvo-scale');
+  await page.locator('#modal .btn', { hasText: '측정 기록' }).click();
+  await page.waitForTimeout(150);
+  await page.locator('#modal .btn', { hasText: '측정 기록' }).click();
+  await page.waitForTimeout(150);
+  const openLog = await page.locator('#modal .log').first().innerText();
+  check(openLog.includes('직류가 어딘가에서 막힌다') && openLog.includes('②를 우회'), 'condenser in series: the bridge reads open, then the plan is recalled');
+  check((await info(page)).flags['a3.measured'] !== true, 'no measurement through the condenser');
+  await page.keyboard.press('Escape');
+  await settle();
+
+  const coilPanel = async () => {
+    await use();
+    try {
+      await page.waitForSelector('#modal .coil-status', { timeout: 6000 });
+    } catch (e) {
+      console.log('DEBUG coil', JSON.stringify(await page.evaluate(async () => {
+        const g = window.__btk.game;
+        const t0 = g.realTime;
+        await new Promise((r) => setTimeout(r, 300));
+        return { dt: g.realTime - t0, busyAnim: g.pl.busyAnim, st: g.pl.state, dead: g.dead, tr: g.transitioning, mode: g.mode, blocking: g.ui.blocking, busyCount: g.busyCount, frozen: g.pl.frozen, hint: g.findInteractable()?.id, active: document.activeElement?.tagName + '.' + document.activeElement?.className, flags: g.state.flags };
+      })), errors);
+      throw e;
+    }
+  };
+  // (b) Firing with the protector still on the line: the discharge goes to earth.
+  await act3({ 'a3.handle': true, 'a3.cells': mask(good), 'a3.measured': true, 'sw.recorder': false, 'sw.condenser': false, 'sw.coil': true });
+  await page.evaluate(() => window.__btk.play('battery', 0.6, 1.55, 0));
+  await settle();
+  await coilPanel();
+  await page.locator('#modal .btn', { hasText: '지금 쏜다' }).click();
+  let lines = await hear();
+  check(lines.some((l) => l.includes('피뢰기에서 퍼런 불꽃')), 'protector left on: the discharge jumps its gap to earth');
+  check((await info(page)).flags['a3.done'] !== true && (await info(page)).flags['a3.coilReadyAt'] > 0, 'nothing reached the cable; the coil must cool');
+  // (c) …and the coil will not fire again until it has cooled.
+  await coilPanel();
+  check(await page.locator('#modal .btn', { hasText: '지금 쏜다' }).isDisabled(), 'the switch is held while the interrupter cools');
+  await page.keyboard.press('Escape');
+  await settle();
+
+  // (d) A weak cell in the string: the interrupter will not stand up.
+  await act3({ 'a3.handle': true, 'a3.cells': mask([...good.slice(0, 11), weak]), 'a3.measured': true, 'sw.recorder': false, 'sw.condenser': false, 'sw.protector': false, 'sw.coil': true });
+  await page.evaluate(() => window.__btk.play('battery', 0.6, 1.55, 0));
+  await settle();
+  await coilPanel();
+  await page.locator('#modal .btn', { hasText: '지금 쏜다' }).click();
+  lines = await hear();
+  check(lines.some((l) => l.includes('축전지가 약하다')), 'one weak cell: the coil barely buzzes');
+  await settle();
+
+  // (e) Everything right but nothing up at the hut: wasted, told so.
+  await act3({ 'a3.handle': true, 'a3.cells': mask(good), 'a3.measured': true, 'sw.recorder': false, 'sw.condenser': false, 'sw.protector': false, 'sw.coil': true });
+  await page.evaluate(() => window.__btk.play('battery', 0.6, 1.55, 0));
+  await settle();
+  await coilPanel();
+  await page.locator('#modal .btn', { hasText: '지금 쏜다' }).click();
+  lines = await hear();
+  check(lines.some((l) => l.includes('뭍에 올라와 있을 때')), 'a clean shot with nothing at the hut is wasted (and says why)');
+
+  // (f) The candle burns through while I am up in the yard: the shot is wasted and the timer clears.
+  await act3({ 'a3.handle': true, 'a3.cells': mask(good), 'a3.measured': true, 'sw.recorder': false, 'sw.condenser': false, 'sw.protector': false, 'sw.coil': true, 'a3.arrived': true });
+  await page.evaluate(() => window.__btk.play('station', 0, 0, 0));
+  await settle();
+  await page.evaluate(() => window.__btk.setFlags({ 'a3.timerAt': window.__btk.game.playTime + 1.5 }));
+  for (let i = 0; i < 30 && (await info(page)).flags['a3.timerAt'] !== 0; i++) await page.waitForTimeout(200);
+  await settle();
+  let f = (await info(page)).flags;
+  check(f['a3.timerAt'] === 0 && f['a3.shots'] >= 1 && f['a3.done'] !== true, 'the candle fired the coil while I was away: wasted, ready to light again');
+
+  // (g) Alone at the hut, the key only gets my own signal back.
+  await act3({});
+  await page.evaluate(() => window.__btk.play('beach', 2.55, 2.65, 0.6));
+  await settle();
+  await page.evaluate(() => window.__btk.game.clearCreatures());
+  await page.evaluate(() => void window.__btk.game.openPanel('hutKey'));
+  await page.waitForSelector('#modal .hut-log');
+  for (const sym of ['· 단점', '− 장점', '· 단점']) await page.locator('#modal .btn', { hasText: sym }).click();
+  await page.locator('#modal .btn', { hasText: '보내기' }).click();
+  await page.waitForFunction(() => document.querySelector('#modal .hut-log')?.textContent.includes('따라 치고'), null, { timeout: 8000 });
+  const hut = await page.locator('#modal .hut-log').innerText();
+  check(hut.includes('회선: R') && !hut.includes('회선: K'), 'alone, the hut key only hears its own R come back');
+  await page.keyboard.press('Escape');
+  await settle();
+
+  // (h) Pell will not sit at the coil while the board is wrong, and says what is wrong.
+  await act3({ 'a3.pell': true, 'a3.pellMet': true, 'a3.handle': true, 'a3.cells': mask(good), 'a3.measured': true, 'sw.recorder': false, 'sw.condenser': false, 'sw.coil': true });
+  await page.evaluate(() => window.__btk.play('battery', 2.4, 1.85, -2.3));
+  await settle();
+  await use();
+  lines = await hear();
+  check(lines.some((l) => l.includes('피뢰기 ③')) && (await info(page)).flags['a3.pellReady'] !== true, `Pell refuses with the protector on, and says so (${lines.at(-1) ?? 'nothing said'})`);
+  await page.evaluate(() => window.__btk.setFlags({ 'sw.protector': false }));
+  await use();
+  lines = await hear();
+  check((await info(page)).flags['a3.pellReady'] === true && lines.some((l) => l.includes('R로 답하시오')), 'with the board right Pell sits at the coil and gives the protocol');
+  // Touching a switch after that takes him off it again.
+  await page.evaluate(() => void window.__btk.game.openPanel('switches'));
+  await page.waitForSelector('#modal .switch-list');
+  await page.locator('#modal .btn', { hasText: '③ 피뢰기' }).click();
+  check((await info(page)).flags['a3.pellReady'] === false, 'changing the board after he checked it un-arms him');
+  await page.keyboard.press('Escape');
+  await settle();
+
+  // (i) At the battery-room door, copying Pell's K gets silence; SOS gets K again; R opens.
+  await act3({ 'a3.pell': true, 'a3.batteryOpen': false });
+  await page.evaluate(() => window.__btk.play('opsroom', 3.85, 4.5, Math.PI / 2));
+  await settle();
+  await page.evaluate(() => window.__btk.game.clearCreatures());
+  const door = async (label) => {
+    await use();
+    for (let i = 0; i < 40 && (await page.locator('#hud .msg .choices .btn').count()) === 0; i++) {
+      if (await page.evaluate(() => !window.__btk.game.ui.msgEl.hidden && !window.__btk.game.ui.choiceNav)) await page.keyboard.press('Space');
+      await page.waitForTimeout(150);
+    }
+    await page.locator('#hud .msg .choices .btn', { hasText: label }).click();
+    return hear(12000);
+  };
+  lines = await door('SOS를 친다');
+  check(lines.some((l) => l.includes('다시 같은 신호')) && (await info(page)).flags['a3.batteryOpen'] !== true, 'SOS at Pell’s door: he asks again');
+  lines = await door('R로 답한다');
+  check((await info(page)).flags['a3.batteryOpen'] === true, 'answering R opens Pell’s door');
+  await settle();
+
+  // (j) The chapter select offers the acts reached.
+  await page.evaluate(() => localStorage.setItem('btk.progress.v1', JSON.stringify({ act: 3, pell: true })));
+  await page.reload();
+  await page.waitForFunction(() => !!window.__btk);
+  await page.waitForTimeout(900);
+  await page.locator('#modal .title .btn', { hasText: '막 선택' }).click();
+  await page.waitForSelector('#modal .panel .eyebrow:has-text("CHAPTERS")');
+  const third = page.locator('#modal .btn', { hasText: '3막 · 뭍으로' });
+  check((await third.count()) === 1 && !(await third.isDisabled()), 'chapter select lists the third act');
+  await third.click();
+  for (let i = 0; i < 60 && (await info(page)).room !== 'station'; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  f = (await info(page)).flags;
+  check((await info(page)).room === 'station' && f.act3 === true && f['a3.pell'] === true, 'starting the third act from the title (with Pell, as reached)');
+  await page.screenshot({ path: '.shots/scen/9-chapter-act3.png' });
   await page.close();
 }
 

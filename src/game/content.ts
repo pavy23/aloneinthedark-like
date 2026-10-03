@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { WeaponSpec } from '../entities/Player';
 import * as P from '../world/props';
+import * as P3 from '../world/props3';
 import { M } from '../render/materials';
 
 export interface ItemDef {
@@ -116,6 +117,83 @@ export const ITEMS: Record<string, ItemDef> = {
   testManual: { id: 'testManual', name: '고장점 측정 요령', desc: '시험실 책상에 붙어 있던 측정 요령 카드.', kind: 'doc', doc: 'testManual', model: () => P.paperItem(M.paper) },
   baleNote: { id: 'baleNote', name: '베일의 측정 기록', desc: '전기기사 베일이 마지막으로 남긴 측정 기록.', kind: 'doc', doc: 'baleNote', model: () => P.paperItem(M.paper) },
   haleLetter: { id: 'haleLetter', name: '선장의 마지막 편지', desc: '방수포에 싸인 채 선장의 가슴 주머니에 들어 있던 편지.', kind: 'doc', doc: 'haleLetter', model: () => P.paperItem(M.paper) },
+  // ---- Act 3
+  telegram: {
+    id: 'telegram',
+    name: '회사의 전보',
+    desc: '앨비언 대서양전신회사 기술부가 보낸 전보. 벨 코브 양륙국이 교신을 끊었다는 내용이다.',
+    kind: 'doc',
+    doc: 'telegram',
+    model: () => P.paperItem(M.paper),
+  },
+  woodAxe: {
+    id: 'woodAxe',
+    name: '장작 도끼',
+    desc: '장작 패는 도끼. 날이 무디지만 무겁다. 소방 도끼만큼은 아니어도 충분히 위험하다.',
+    kind: 'weapon',
+    weapon: { id: 'woodAxe', damage: 2, range: 1.35, hitAt: 0.42, duration: 0.9 },
+    model: P3.woodAxeItem,
+  },
+  stationDiary: {
+    id: 'stationDiary',
+    name: '소장의 일지',
+    desc: '벨 코브 양륙국 소장 R. 커크패트릭의 일지. 마지막 장이 젖어 있다.',
+    kind: 'doc',
+    doc: 'stationDiary',
+    model: () => P.bookItem(M.leather),
+  },
+  codeCard: {
+    id: 'codeCard',
+    name: '기록지 판독 요령',
+    desc: '야간 근무자용 카드. 사이펀 기록지 읽는 법과 케이블 부호표.',
+    kind: 'doc',
+    doc: 'codeCard',
+    model: () => P.paperItem(M.paper),
+  },
+  batteryLog: {
+    id: 'batteryLog',
+    name: '축전지 관리 수첩',
+    desc: '축전지 비중을 적어 두는 수첩.',
+    kind: 'doc',
+    doc: 'batteryLog',
+    model: () => P.bookItem(M.leather),
+  },
+  hydrometer: {
+    id: 'hydrometer',
+    name: '비중계',
+    desc: '고무 구를 눌러 축전지의 황산을 빨아올리고, 안의 뜨개가 얼마나 뜨는지로 비중을 읽는 유리관.',
+    kind: 'quest',
+    model: P3.hydrometerItem,
+  },
+  candle: {
+    id: 'candle',
+    name: '양초와 성냥',
+    desc: '난로 선반에 있던 양초 한 묶음과 성냥. 전기가 나간 밤을 위한 것이다.',
+    kind: 'quest',
+    model: P3.candleItem,
+  },
+  rum3: {
+    id: 'rum3',
+    name: '럼 병',
+    desc: '통신실 난로 선반에 있던 럼. 반쯤 비었다. (체력 회복)',
+    kind: 'heal',
+    useText: '럼을 한 모금 들이켰다. 독한 술이 식도를 태우며 내려가고, 곱은 손끝에 피가 돈다.',
+    model: P.bottle,
+  },
+  brandy3: {
+    id: 'brandy3',
+    name: '브랜디 플라스크',
+    desc: '축전지실 상자 위에 남아 있던 술병. 누군가 여기서 며칠을 버티며 아껴 마셨다. (체력 회복)',
+    kind: 'heal',
+    model: P.flask,
+  },
+  swHandle: {
+    id: 'swHandle',
+    name: '⑤번 스위치 손잡이',
+    desc: '회선 전환반 ⑤번 고압 스위치에서 뽑아 둔 손잡이. 흑단 손잡이에 놋쇠 날이 달려 있다.',
+    kind: 'key',
+    model: P3.switchHandleItem,
+  },
 };
 
 export interface DocDef {
@@ -244,6 +322,60 @@ export const DOCS: Record<string, DocDef> = {
     style: 'plate',
     pages: [
       `A ·−      B −···    C −·−·    D −··\nE ·       F ··−·    G −−·     H ····\nI ··      J ·−−−    K −·−     L ·−··\nM −−      N −·      O −−−     P ·−−·\nQ −−·−    R ·−·     S ···     T −\nU ··−     V ···−    W ·−−     X −··−\nY −·−−    Z −−··\n\n조난 신호  SOS  · · ·  − − −  · · ·\n(1906년 베를린 국제무선전신협약에서 채택)`,
+    ],
+  },
+  // ---- Act 3
+  telegram: {
+    id: 'telegram',
+    title: '전보 — 앨비언 대서양전신회사 기술부',
+    style: 'typed',
+    pages: [
+      `1926년 2월 24일, 런던\n\n조사관 귀하\n\n뉴펀들랜드 트리니티만의 벨 코브 양륙국과 2월 21일 밤부터 교신이 끊겼음. 같은 밤 아일랜드의 캐리긴국이 받은 벨 코브의 마지막 전문은 다음과 같음.\n\n  IT COMES ASHORE — 그것이 뭍으로 온다\n\n작년 12월 본사 수리선이 탈라사호 사고 구간에서 가라앉은 끝을 건져 새 케이블을 잇고 회선을 복구하였음. 그 뒤 벨 코브의 고장 시험값이 날마다 육지 쪽으로 줄어든다는 보고가 있었으나, 본사는 계기 이상으로 판단하였음.`,
+      `귀하의 탈라사호 보고서를 끝까지 읽은 사람은 본사에 몇 되지 않음. 그 몇 사람의 요청으로, 현지 확인을 의뢰함.\n\n세인트존스에서 기차, 하츠 콘텐트까지 우편선, 그 뒤로는 썰매를 준비해 두었음.\n\n— 앨비언 대서양전신회사 기술부`,
+    ],
+  },
+  stationDiary: {
+    id: 'stationDiary',
+    title: '벨 코브 양륙국 소장 일지 — R. 커크패트릭',
+    style: 'hand',
+    pages: [
+      `12월 9일\n수리선이 마무리 접속을 마치고 돌아갔다. 회선 복구. 캐리긴과 교신 양호.\n\n1월 3일\n밤 근무 기록지에 아무도 보내지 않은 신호가 찍혔다. 세 번, 쉬고, 세 번. 캐리긴도 보낸 적이 없단다.\n고장 시험. 신호는 통하는데 브리지는 713해리에서 완전 단선이라고 한다.\n\n1월 20일\n493해리. 잴 때마다 줄어든다. 하루 13해리 — 무언가 케이블을 타고 이쪽으로 온다. 이대로면 2월 말에 뭍에 닿는다.`,
+      `2월 2일\n우리가 보낸 전문이 되돌아온다. 위아래가 뒤집힌 채로 — 점이 선이 되고 선이 점이 된다. 우리 송신은 우리 기록지에 남지 않으니, 우리가 무엇을 보냈는지는 그 메아리로만 안다.\n\n2월 15일\n탈라사호 보고서 사본을 읽었다. 그들은 불로 손가락을 태웠다. 우리에게는 화실이 없다. 대신 창고에 오래된 큰 유도 코일이 있다. 1858년 화이트하우스가 첫 대서양 케이블에 썼다는 5피트짜리와 같은 물건이라고, 늙은 맥그래스가 늘 자랑하던 것.`,
+      `2월 19일 — 계획\n그것이 해안 구간에 들어오면, 고장점이 오두막 코앞일 때, 코일로 고압을 먹인다.\n· 축전지 열두 개를 직렬로. 비중 1.25가 넘는 놈만.\n· 기록계, 브리지, 피뢰기는 반드시 뗀다. 축전기는 우회.\n· 오두막에서 신호하면 여기서 쏜다. 아니면 — 시간을 맞춰 둔다.\n\n⑤번 고압 스위치의 손잡이는 뽑아서 창고에 넣고 잠갔다. 겁먹은 사람이 코일로 장난치지 못하게. 창고 번호는 내 머리와 캐리긴에만 둔다. 오늘 밤 캐리긴에 보냈다.`,
+      `2월 21일\n78해리. 계산대로라면 엿새 뒤 뭍에 닿는다.\n그런데 오늘 밤 마당에 젖은 발자국이 있었다. 바다에서 올라와 창문 밑까지. 놈의 손가락들이 먼저 온다.\n\n기록지에 뒤집힌 메아리가 찍혔다. 이틀 전 캐리긴에 보낸 그 전문이다. 놈이 우리 전문을 기억한다.\n\n(아래, 번진 글씨)\n불을 꺼뜨리지 마라. 오두막의 키는 ·−· 로 —`,
+    ],
+  },
+  codeCard: {
+    id: 'codeCard',
+    title: '사이펀 기록지 판독 요령 — 야간 근무자용',
+    style: 'typed',
+    pages: [
+      `벨 코브 양륙국\n\n1. 기록지 가운데 선보다 위로 흔들리면 점(·), 아래로 흔들리면 선(−). 케이블에서는 점과 선의 길이가 같다. 전류 방향만 다르다.\n2. 글자 사이는 조금 쉬고, 낱말 사이는 길게 쉰다.\n3. 숫자는 다섯 자리 부호다.\n\nA ·−    B −···  C −·−·  D −··   E ·\nF ··−·  G −−·   H ····  I ··    J ·−−−\nK −·−   L ·−··  M −−    N −·    O −−−\nP ·−−·  Q −−·−  R ·−·   S ···   T −\nU ··−   V ···−  W ·−−   X −··−  Y −·−−\nZ −−··`,
+      `숫자\n\n1 ·−−−−   2 ··−−−   3 ···−−   4 ····−   5 ·····\n6 −····   7 −−···   8 −−−··   9 −−−−·   0 −−−−−\n\n※ 극성이 뒤집혀 들어온 신호는 점과 선이 모두 뒤바뀌어 찍힌다. 읽히지 않는 글자가 섞이면 의심할 것.`,
+    ],
+  },
+  batteryLog: {
+    id: 'batteryLog',
+    title: '축전지 관리 수첩',
+    style: 'log',
+    pages: [
+      `납축전지 16개(유리 용기). 비중계로 매주 측정.\n\n · 1.250 이상 ── 충전 양호\n · 1.150 ~ 1.250 ── 충전 부족, 재충전 요\n · 1.150 미만 ── 방전\n\n유도 코일 1차: 24볼트. 충전 양호한 셀 12개를 직렬로 묶는다. 약한 셀이 하나라도 섞이면 단속기가 제대로 서지 않는다.\n\n2월 18일 — 충전 발전기 고장. 이후 충전 못 함. 측정값이 셀마다 제각각이다.`,
+    ],
+  },
+  switchPlan: {
+    id: 'switchPlan',
+    title: '회선 전환반 결선도 — 벨 코브 양륙국',
+    style: 'plate',
+    pages: [
+      `해저선 (오두막 경유)\n   │\n   ├── ③ 피뢰기 ── 방전 간극 ── 접지\n   │\n   ② 신호 축전기   [넣음: 직렬 │ 뺌: 우회]\n   │\n   ├── ① 송수신 ── 사이펀 기록계\n   ├── ④ 시험 ──── 휘트스톤 브리지\n   └── ⑤ 고압 ──── 유도 코일 2차\n\n※ 신호 축전기는 직류를 통과시키지 않는다.\n  저항 시험 때는 ②를 빼서 우회할 것.\n※ 고압을 걸 때는 ①·④를 떼고 ③ 피뢰기도 뗄 것.\n  남은 곳으로 방전이 모두 빠져나간다.`,
+    ],
+  },
+  coilNote: {
+    id: 'coilNote',
+    title: '유도 코일에 매달린 꼬리표',
+    style: 'hand',
+    pages: [
+      `유도 코일 — 5피트\n1차 24볼트, 단속기 부착. 2차는 2천 볼트쯤 된다고들 한다.\n\n1858년 8월, 첫 대서양 케이블. 신호가 약하자 전기기사 화이트하우스는 이런 코일로 높은 전압을 걸었다. 3주 뒤 케이블은 죽었다. 사람들은 그의 코일이 케이블을 태웠다고 한다. 케이블이 처음부터 부실했다는 말도 있다.\n\n— 이번에는 그 일을 일부러 하려는 것이다. R.K.`,
     ],
   },
 };

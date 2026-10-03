@@ -507,6 +507,130 @@ export const Tex = {
   },
 };
 
+// ------------------------------------------------------------------ Act 3: Bell Cove, Newfoundland, in winter
+
+export const Tex3 = {
+  /** Wind-packed snow: blue-white with drift ripples and faint sastrugi. Tile = 3 m. */
+  snow(seed = 301): THREE.CanvasTexture {
+    return make(`snow-${seed}`, 64, 64, seed, (ctx, w, h, r) => {
+      ctx.fillStyle = '#c9d2d8';
+      ctx.fillRect(0, 0, w, h);
+      blotches(ctx, w, h, r, 30, ['#e8eef2', '#aab6c0', '#ffffff'], 0.25, 9);
+      // Drift ripples running across the wind.
+      for (let y = 2; y < h; y += 5 + Math.floor(r() * 3)) {
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = '#8c9aa6';
+        for (let x = 0; x < w; x++) if (Math.sin((x + y * 0.7) * 0.3) > 0.55) ctx.fillRect(x, (y + Math.round(Math.sin(x * 0.2) * 1.5) + h) % h, 1, 1);
+      }
+      ctx.globalAlpha = 1;
+      grain(ctx, w, h, r, 10);
+    });
+  },
+
+  /** Painted clapboard siding (Newfoundland outport style), the paint flaking. Boards run along U. Tile = 2 m. */
+  clapboard(base = '#c8bfa8', seed = 311): THREE.CanvasTexture {
+    return make(`clap-${base}-${seed}`, 64, 64, seed, (ctx, w, h, r) => {
+      ctx.fillStyle = base;
+      ctx.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 6) {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(0, y + 5, w, 1);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(0, y, w, 1);
+      }
+      blotches(ctx, w, h, r, 14, ['#6e6658', '#4a4438'], 0.35, 3);
+      streaks(ctx, w, h, r, 6, '#5a4a38', 0.3);
+      grain(ctx, w, h, r, 12);
+    });
+  },
+
+  /** Distempered plaster wall: cream, damp-stained, a few hairline cracks. Tile = 2 m. */
+  plaster(base = '#cfc6ac', seed = 341): THREE.CanvasTexture {
+    return make(`plaster-${base}-${seed}`, 64, 64, seed, (ctx, w, h, r) => {
+      ctx.fillStyle = base;
+      ctx.fillRect(0, 0, w, h);
+      blotches(ctx, w, h, r, 22, ['#a89e84', '#e0d8c0', '#8c826a'], 0.12, 10);
+      ctx.strokeStyle = 'rgba(70,60,44,0.22)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 2; i++) {
+        let x = r() * w;
+        let y = r() * h;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let k = 0; k < 6; k++) {
+          x += (r() - 0.5) * 8;
+          y += 2 + r() * 4;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      streaks(ctx, w, h, r, 5, '#6a5a40', 0.18);
+      grain(ctx, w, h, r, 8);
+    });
+  },
+
+  /** Beach shingle: rounded grey pebbles with snow in the hollows. Tile = 1.5 m. */
+  shingle(seed = 321): THREE.CanvasTexture {
+    return make(`shingle-${seed}`, 64, 64, seed, (ctx, w, h, r) => {
+      ctx.fillStyle = '#4a4c4a';
+      ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 140; i++) {
+        const t = 70 + Math.floor(r() * 70);
+        ctx.fillStyle = `rgb(${t},${t},${Math.floor(t * 0.96)})`;
+        const x = r() * w;
+        const y = r() * h;
+        const rad = 1 + r() * 2.6;
+        for (const ox of [-w, 0, w])
+          for (const oy of [-h, 0, h]) {
+            ctx.beginPath();
+            ctx.ellipse(x + ox, y + oy, rad, rad * 0.75, r() * Math.PI, 0, Math.PI * 2);
+            ctx.fill();
+          }
+      }
+      blotches(ctx, w, h, r, 16, ['#d8e0e4', '#c0cad0'], 0.55, 4);
+      grain(ctx, w, h, r, 14);
+    });
+  },
+
+  /** Cast concrete with shuttering lines and salt stains. Tile = 2 m. */
+  concrete(seed = 331): THREE.CanvasTexture {
+    return make(`concrete-${seed}`, 64, 64, seed, (ctx, w, h, r) => {
+      ctx.fillStyle = '#7c7a72';
+      ctx.fillRect(0, 0, w, h);
+      blotches(ctx, w, h, r, 40, ['#5c5a52', '#9a988e', '#d0d4cc'], 0.18, 6);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      for (let y = 0; y < h; y += 16) ctx.fillRect(0, y, w, 1);
+      streaks(ctx, w, h, r, 8, '#3c3a34', 0.3);
+      grain(ctx, w, h, r, 16);
+    });
+  },
+
+  /** Black slate switchboard panel. */
+  slate(seed = 341): THREE.CanvasTexture {
+    return make(`slate-${seed}`, 32, 32, seed, (ctx, w, h, r) => {
+      ctx.fillStyle = '#1c1f22';
+      ctx.fillRect(0, 0, w, h);
+      blotches(ctx, w, h, r, 10, ['#2c3034', '#121416'], 0.4, 5);
+      grain(ctx, w, h, r, 8);
+    });
+  },
+
+  /** A length of siphon-recorder tape with an ink trace (decoration only). */
+  tape(seed = 351): THREE.CanvasTexture {
+    return make(`tape-${seed}`, 64, 8, seed, (ctx, w, h, r) => {
+      ctx.fillStyle = '#d8ceb0';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#28305a';
+      let y = 4;
+      for (let x = 0; x < w; x++) {
+        if (r() < 0.12) y = r() < 0.5 ? 2 : 6;
+        else if (r() < 0.2) y = 4;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    });
+  },
+};
+
 /** Fixed-size unit for texture tiling (metres per texture repeat) for each texture family. */
 export const TILE = {
   steel: 2,
@@ -524,4 +648,9 @@ export const TILE = {
   coal: 0.6,
   rug: 2,
   blanket: 1,
+  snow: 3,
+  plaster: 2,
+  clapboard: 2,
+  shingle: 1.5,
+  concrete: 2,
 } as const;

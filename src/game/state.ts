@@ -45,7 +45,7 @@ export function newState(): GameState {
   };
 }
 
-const ROOMS: RoomId[] = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2'];
+const ROOMS: RoomId[] = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach'];
 
 /** Validate untrusted JSON (localStorage can hold anything) into a GameState or null. */
 export function parseState(raw: unknown): GameState | null {
@@ -187,4 +187,38 @@ export function formatTime(sec: number): string {
   const mm = Math.floor((s % 3600) / 60);
   const ss = s % 60;
   return hh > 0 ? `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${mm}:${String(ss).padStart(2, '0')}`;
+}
+
+// ------------------------------------------------------------------ Progress (for starting at a later act)
+
+const PROGRESS_KEY = 'btk.progress.v1';
+
+export interface Progress {
+  /** Highest act reached on this browser. */
+  act: number;
+  /** Whether the operator came off the ship with you (decides who is waiting at Bell Cove). */
+  pell: boolean;
+}
+
+export function readProgress(): Progress {
+  try {
+    const s = storage()?.getItem(PROGRESS_KEY);
+    if (!s) return { act: 1, pell: false };
+    const o = JSON.parse(s) as Partial<Progress>;
+    const act = Math.max(1, Math.min(9, Math.round(Number(o.act) || 1)));
+    return { act, pell: o.pell === true };
+  } catch {
+    return { act: 1, pell: false };
+  }
+}
+
+/** Remember reaching an act (never lowers what was reached before). */
+export function noteProgress(act: number, pell?: boolean): void {
+  try {
+    const now = readProgress();
+    const next: Progress = { act: Math.max(now.act, act), pell: pell ?? now.pell };
+    storage()?.setItem(PROGRESS_KEY, JSON.stringify(next));
+  } catch {
+    // Storage unavailable (private mode etc.): starting at a later act just stays locked.
+  }
 }

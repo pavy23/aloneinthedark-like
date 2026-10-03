@@ -35,6 +35,14 @@ const flagSets = [
   { power: true, idolBurned: true, act2: true, 'a2.t0': 0, 'vc.sea': true, 'vc.tank2': true, 'vc.level': 1 },
   { power: true, idolBurned: true, act2: true, 'a2.t0': 0, pellFreed: true, testUnlocked: true, 'a2.measured': true, tank2Drained: true, tank2Open: true },
 ];
+// The third act (Bell Cove): as found, with Pell sitting at the coil, and alone with the candle burning.
+const sw = (o) => ({ 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true, 'sw.bridge': false, 'sw.coil': false, ...o });
+const act3Sets = [
+  { act3: true, 'a3.pell': false, 'a3.t0': 0, 'a3.seed': 5, 'a3.combo': 123, ...sw({}) },
+  { act3: true, 'a3.pell': true, 'a3.t0': 0, 'a3.seed': 9, 'a3.combo': 808, 'a3.batteryOpen': true, 'a3.pellMet': true, 'a3.handle': true, 'a3.measured': true, 'a3.pellReady': true, ...sw({ 'sw.recorder': false, 'sw.condenser': false, 'sw.protector': false, 'sw.coil': true }) },
+  { act3: true, 'a3.pell': false, 'a3.t0': 0, 'a3.seed': 3, 'a3.combo': 51, 'a3.batteryOpen': true, 'a3.handle': true, 'a3.measured': true, 'a3.timerAt': 25, ...sw({ 'sw.coil': true }) },
+];
+const ACT3_ROOMS = ['station', 'opsroom', 'battery', 'beach'];
 // Every combination of control scheme and camera gets some rooms.
 const schemes = [
   ['direct', 'follow'],
@@ -43,14 +51,16 @@ const schemes = [
   ['tank', 'follow'],
 ];
 let stuck = 0;
-for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2'].entries()) {
-  const flags = flagSets[Math.floor(rnd() * flagSets.length)];
+for (const [ri, room] of ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', ...ACT3_ROOMS].entries()) {
+  const sets = ACT3_ROOMS.includes(room) ? act3Sets : flagSets;
+  const flags = sets[Math.floor(rnd() * sets.length)];
   const [controls, camera] = schemes[ri % schemes.length];
   await page.evaluate(([r, f, controls, camera]) => {
     const b = window.__btk;
     b.game.applySettings({ ...b.game.settings, controls, camera });
     b.game.state.flags = { ...f };
-    for (const i of ['crowbar', 'axe', 'cabinKey', 'crank', 'brandy1', 'idol', 'testKey', 'brakeKey', 'rum']) if (Math.random() < 0.5) b.give(i);
+    b.game.state.time = 0;
+    for (const i of ['crowbar', 'axe', 'cabinKey', 'crank', 'brandy1', 'idol', 'testKey', 'brakeKey', 'rum', 'woodAxe', 'hydrometer', 'candle', 'codeCard', 'swHandle', 'rum3', 'brandy3']) if (Math.random() < 0.5) b.give(i);
     return b.play(r);
   }, [room, flags, controls, camera]);
   const t0 = Date.now();

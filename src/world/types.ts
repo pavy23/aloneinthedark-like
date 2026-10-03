@@ -4,10 +4,25 @@ import type { CollisionWorld, Rect } from './collision';
 import type { NavGrid } from './nav';
 import type { RoomBuilder } from './RoomBuilder';
 
-export type RoomId = 'deck' | 'bridge' | 'corridor' | 'cabin' | 'radio' | 'engine' | 'hold' | 'fcsle' | 'testroom' | 'tank2';
+export type RoomId =
+  | 'deck'
+  | 'bridge'
+  | 'corridor'
+  | 'cabin'
+  | 'radio'
+  | 'engine'
+  | 'hold'
+  | 'fcsle'
+  | 'testroom'
+  | 'tank2'
+  // Act 3: the cable landing station at Bell Cove
+  | 'station'
+  | 'opsroom'
+  | 'battery'
+  | 'beach';
 
-export type AmbienceId = 'deck' | 'interior' | 'engine' | 'hold' | 'bridge' | 'none';
-export type Surface = 'metal' | 'wood' | 'grate' | 'lino';
+export type AmbienceId = 'deck' | 'interior' | 'engine' | 'hold' | 'bridge' | 'snow' | 'shore' | 'station' | 'none';
+export type Surface = 'metal' | 'wood' | 'grate' | 'lino' | 'snow' | 'shingle';
 
 export interface Spawn {
   x: number;
@@ -125,8 +140,9 @@ export interface CreatureSpawn {
   entrance?: 'rise' | 'none';
   speed?: number;
   delay?: number;
-  /** 'captain' is the drowned master in tank No.2 (bigger, tougher, hits harder). */
-  variant?: 'crew' | 'captain';
+  /** 'captain' is the drowned master in tank No.2 (bigger, tougher, hits harder); 'limb' is what comes
+   * out of the sea at the cable hut (rooted to the spot, long reach, cannot be killed by a blade). */
+  variant?: 'crew' | 'captain' | 'limb';
   /** Hit points taken from the player per blow (default 1). */
   strength?: number;
 }
@@ -135,6 +151,22 @@ export interface ChoiceOption {
   label: string;
   disabled?: boolean;
 }
+
+export type PanelKind =
+  | 'safe'
+  | 'dynamo'
+  | 'radio'
+  | 'bridge'
+  | 'valves'
+  | 'cableEngine'
+  // Act 3
+  | 'tape'
+  | 'combo'
+  | 'rack'
+  | 'switches'
+  | 'bridge3'
+  | 'coil'
+  | 'hutKey';
 
 /** The surface area room scripts use to drive the game. Implemented by Game. */
 export interface GameAPI {
@@ -155,7 +187,7 @@ export interface GameAPI {
   goto(room: RoomId, spawn: string, sfx?: 'door' | 'hatch' | 'ladder' | 'none'): Promise<void>;
   sfx(name: string, opts?: { volume?: number; x?: number; z?: number }): void;
   wait(seconds: number): Promise<void>;
-  openPanel(kind: 'safe' | 'dynamo' | 'radio' | 'bridge' | 'valves' | 'cableEngine'): Promise<void>;
+  openPanel(kind: PanelKind): Promise<void>;
   cutTo(cam: CameraDef | null): void;
   shake(amount: number, seconds?: number): void;
   flash(color: number, amount: number): void;
@@ -171,4 +203,10 @@ export interface GameAPI {
   note(text: string): void;
   /** Big chapter caption (like a room caption, but for acts). */
   chapter(title: string, sub: string): void;
+  /** End the current act: its closing scene, then the next act begins (or the game ends). */
+  nextAct(): Promise<void>;
+  /** A script is running (player control locked) or a room transition is under way. */
+  readonly busy: boolean;
+  /** Run a script with player control locked. */
+  run(fn: () => void | Promise<void>): Promise<void>;
 }

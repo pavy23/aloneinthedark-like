@@ -12,7 +12,9 @@ const root = process.env.E2E_ROOT ?? 'dist';
 const pagePath = process.env.E2E_PAGE ?? '';
 const scheme = process.env.E2E_SCHEME === 'tank' ? 'tank' : 'direct';
 // E2E_FROM=act2 skips the first act (sets its outcome directly) and starts at the furnace with the stone.
+// E2E_FROM=act3 starts the third act from its chapter state (E2E_PELL=1: with the operator; default alone).
 const fromAct2 = process.env.E2E_FROM === 'act2';
+const fromAct3 = process.env.E2E_FROM === 'act3';
 const port = 4800 + Math.floor(Math.random() * 500);
 const server = spawn('node', ['scripts/serve.mjs', root, String(port)], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 400));
@@ -220,10 +222,11 @@ const fight = async (maxMs = 30000) => {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     const st = await info();
-    const alive = st.creatures.filter((c) => c.state !== 'gone' && c.state !== 'dying');
+    // The thing at the cable hut cannot be cut down; the fight is with whatever walks.
+    const alive = st.creatures.filter((c) => c.state !== 'gone' && c.state !== 'dying' && c.id !== 'a3limb');
     if (alive.length === 0) return true;
     if (st.hp <= 3) {
-      const heal = st.inv.find((i) => i.startsWith('brandy') || i === 'rum');
+      const heal = st.inv.find((i) => i.startsWith('brandy') || i.startsWith('rum'));
       if (heal)
         await page.evaluate((id) => {
           void window.__btk.game.useItem(id);
@@ -245,6 +248,13 @@ const fight = async (maxMs = 30000) => {
   }
   return false;
 };
+if (fromAct3) {
+  await page.waitForTimeout(800);
+  await page.evaluate((p) => void window.__btk.startChapter(3, p), process.env.E2E_PELL === '1');
+  await playAct3(process.env.E2E_PELL === '1');
+  await finish();
+}
+
 // ------------------------------------------------------------------ Title & intro
 await page.waitForTimeout(800);
 await shot('title');
@@ -817,18 +827,332 @@ await go([[2.2, 0.5], [2.6, -1.0], [3.7, -1.6], [3.65, -3.0]], 3.6, -4.0, 'deck'
 await expect(await T('path', [[1.5, 4.6], [-1.5, 4.6], [-3.5, 3.0], [-4.8, -1.2]], 0.25), 'to the Jacob’s ladder');
 await T('face', -6.0, -1.2);
 await T('act');
-for (let i = 0; i < 60 && (await info()).mode !== 'ending'; i++) await T('skip', 3);
-await expect((await info()).mode === 'ending', 'reached the ending');
-await page.waitForTimeout(2500);
-for (let i = 0; i < 16 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(300);
+// Down the ladder: the second act ends (the interlude), and the third begins at Bell Cove.
+for (let i = 0; i < 60 && (await info()).mode === 'play' && (await info()).room === 'deck'; i++) await T('skip', 3);
+await page.waitForSelector('#modal .story', { timeout: 10000 });
+await shot('interlude');
+const interlude = await page.locator('#modal .story').innerText();
+await expect(interlude.includes('2막 끝') && interlude.includes('케이블국'), 'the interlude closes the second act (Pell went to a cable station)');
+await playAct3(true);
+await finish();
+
+// ------------------------------------------------------------------ Act III: Landfall
+async function playAct3(pell) {
+  // The interlude and the act's opening are story screens: page through them.
+  for (let i = 0; i < 120; i++) {
+    const st = await info();
+    if (st.mode === 'play' && st.room === 'station') break;
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(250);
+  }
+  await waitIdle();
+  let st = await info();
+  await expect(st.room === 'station' && st.flags.act3 === true && st.flags['a3.pell'] === pell, 'the third act begins at Bell Cove');
+  await expect(st.inv.join() === 'lantern,telegram' && st.hp === 6 && !st.flags.act2, 'a fresh start: lantern, telegram, full health, the ship left behind');
+  log(`ACT III (${pell ? 'with Pell' : 'alone'}): store combination ${String(st.flags['a3.combo']).padStart(3, '0')}`);
+  await shot('act3-yard');
+
+  const arrive3 = async (room) => {
+    await page.waitForFunction((r) => window.__btk.info().room === r && !window.__btk.info().busy, room, { timeout: 10000 });
+    await waitIdle();
+  };
+  const clear3 = async (what) => {
+    await page.waitForTimeout(400);
+    if ((await info()).creatures.some((c) => c.state !== 'gone' && c.id !== 'a3limb')) await expect(await fight(60000), `won the fight: ${what}`);
+    await waitIdle();
+  };
+  const go3 = async (pts, fx, fz, room, what) => {
+    await expect(await T('path', pts, 0.25), what);
+    await T('face', fx, fz);
+    await T('act');
+    await arrive3(room);
+  };
+  const choose = async (label) => {
+    for (let i = 0; i < 40 && (await page.locator('#hud .msg .choices .btn').count()) === 0; i++) {
+      if (await page.evaluate(() => window.__t.msgOpen() && !window.__btk.game.ui.choiceNav)) await T('press', 'action');
+      await page.waitForTimeout(150);
+    }
+    await page.locator('#hud .msg .choices .btn', { hasText: label }).first().click();
+    return T('skip', 600);
+  };
+  const actAt = async (pts, fx, fz, what) => {
+    await expect(await T('path', pts, 0.2), what);
+    await T('face', fx, fz);
+    await T('act');
+  };
+  const openedPanel = async (sel) => {
+    for (let i = 0; i < 60 && (await page.locator(`#modal ${sel}`).count()) === 0; i++) {
+      if (await page.evaluate(() => window.__t.msgOpen())) await T('press', 'action');
+      if ((await page.locator('#modal .doc').count()) > 0) await closeDoc();
+      await page.waitForTimeout(120);
+    }
+    await page.waitForSelector(`#modal ${sel}`, { timeout: 5000 });
+  };
+
+  // ---- the yard: the splitting axe on the chopping block
+  await actAt([[-1, -4.0], [-3.3, 2.7]], -3.3, 3.6, 'walk to the chopping block');
+  await waitIdle();
+  await expect((await info()).inv.includes('woodAxe'), 'took the wood axe');
+  await page.evaluate(() => window.__btk.game.equip('woodAxe'));
+  await go3([[-1.5, 3.6], [0, 4.6]], 0, 6, 'opsroom', 'into the station house');
+  log('operating room');
+  await shot('act3-opsroom');
+
+  // ---- operating room: the diary, the code card, the candle and the rum
+  await actAt([[-0.5, 2.0], [-3.3, 3.9]], -4.25, 3.2, 'walk to the desk');
+  await page.waitForSelector('#modal .doc', { timeout: 6000 });
+  await closeDoc();
+  await waitIdle();
+  await actAt([[-1.6, 5.15]], -1.6, 6.05, 'walk to the code card');
+  await page.waitForSelector('#modal .doc', { timeout: 6000 });
+  await closeDoc();
+  await waitIdle();
+  await actAt([[1.5, 3.2], [3.85, 2.5]], 4.7, 2.25, 'walk to the stove shelf');
+  await waitIdle();
+  await T('face', 4.7, 2.8);
+  await T('act');
+  await waitIdle();
+  st = await info();
+  await expect(['stationDiary', 'codeCard', 'candle', 'rum3'].every((i) => st.inv.includes(i)), 'diary, code card, candle and rum taken');
+
+  // ---- the recorder: read the night tape with the card, and read it the right way up
+  await actAt([[0.6, 4.35]], 0.6, 5.45, 'walk to the recorder');
+  await openedPanel('canvas.tape-strip');
+  await clickBtn('판독 메모');
+  const tapeLog = await page.locator('#modal .log').first().innerText();
+  const m = tapeLog.match(/카드대로 읽으면: \S+ \S+ (\d)(\d)(\d)/);
+  await expect(!!m && tapeLog.includes('부호표에 없는 글자'), `the clerk's literal reading shows a reversed message: ${tapeLog.split('\n')[0]}`);
+  const literal = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const combo = literal.map((d) => (d + 5) % 10);
+  log('tape reads', literal.join(''), '-> reversed back', combo.join(''));
+  await expect(combo.join('') === String((await info()).flags['a3.combo']).padStart(3, '0'), 'reading the echo the other way up gives the store number');
+  await shot('act3-tape');
+  await clickBtn('물러나기');
+  await T('skip', 40);
+  await page.waitForFunction(() => window.__btk.info().creatures.some((c) => c.id === 'a3clerk'), null, { timeout: 6000 });
+  await clear3('the night clerk');
+  log('clerk down, hp', (await info()).hp);
+
+  // ---- the battery-room door
+  await actAt([[2.6, 3.8], [3.85, 4.5]], 5, 4.5, 'walk to the battery-room door');
+  if (pell) {
+    const heard = await choose('K를 친다');
+    await expect(heard.some((l) => l.includes('따라 쳤다')), 'copying his knock gets no answer');
+    await T('act');
+    await choose('R로 답한다');
+    await arrive3('battery');
+    await waitIdle();
+    await expect((await info()).flags['a3.pellMet'] === true, 'Pell lets me in and tells what happened');
+  } else {
+    const heard = await choose('R로 답한다');
+    await expect(heard.some((l) => l.includes('내가 친 그대로')), 'whatever is behind the door copies the knock');
+    await T('act');
+    await choose('문을 연다');
+    await clear3('the thing behind the door');
+    await go3([[3.0, 3.6], [3.85, 4.5]], 5, 4.5, 'battery', 'through the open door');
+  }
+  log('battery room');
+  await shot('act3-battery');
+
+  // ---- hydrometer and battery book
+  await actAt([[-1.0, 3.6], [2.85, 1.3]], 2.85, 0.45, 'walk to the hydrometer');
+  await waitIdle();
+  await actAt([[3.35, 1.3]], 3.35, 0.5, 'walk to the battery book');
+  await page.waitForSelector('#modal .doc', { timeout: 6000 });
+  await closeDoc();
+  await waitIdle();
+  st = await info();
+  await expect(['hydrometer', 'batteryLog'].every((i) => st.inv.includes(i)), 'hydrometer and battery book taken');
+  if (!pell) {
+    // Alone, the night operator's flask is left on his crate.
+    await actAt([[1.95, 1.75]], 1.95, 1.0, 'walk to the crate');
+    await waitIdle();
+    await expect((await info()).inv.includes('brandy3'), 'took the flask');
+  }
+
+  // ---- the rack: measure every cell, string the twelve charged ones
+  await actAt([[2.65, 3.0]], 3.55, 3.0, 'walk to the rack');
+  await openedPanel('.rack-grid');
+  const dom = (i) => (i >= 8 ? i - 8 : i + 8);
+  const sgs = [];
+  for (let i = 0; i < 16; i++) {
+    await page.locator('#modal .rack-grid .cell').nth(dom(i)).click();
+    await clickBtn('비중 재기');
+    sgs.push(Number(await page.locator('#modal .rack-grid .cell').nth(dom(i)).locator('.sg').innerText()));
+  }
+  const good = sgs.map((v, i) => (v >= 1.25 ? i : -1)).filter((i) => i >= 0);
+  log('specific gravities', sgs.map((v) => v.toFixed(3)).join(' '));
+  await expect(good.length === 12, 'twelve cells read as charged');
+  // A weak cell first, to see it counted (then taken out again).
+  const weak = sgs.findIndex((v) => v < 1.25);
+  for (const i of [weak, ...good.slice(0, 11)]) {
+    await page.locator('#modal .rack-grid .cell').nth(dom(i)).click();
+    await clickBtn('셀 넣기');
+  }
+  await expect((await info()).flags['a3.cells'] > 0, 'cells strapped in');
+  await page.locator('#modal .rack-grid .cell').nth(dom(weak)).click();
+  await clickBtn('셀 빼기');
+  await page.locator('#modal .rack-grid .cell').nth(dom(good[11])).click();
+  await clickBtn('셀 넣기');
+  await expect((await page.locator('#modal .rack-status').innerText()).startsWith('직렬 12 / 12'), 'twelve in series');
+  await shot('act3-rack');
+  await clickBtn('물러나기');
+  await waitIdle();
+
+  // ---- the store: the echo's number first (it fails), then the number that was sent
+  await actAt([[0.5, 4.3], [-2.65, 4.85]], -3.63, 4.85, 'walk to the store');
+  await openedPanel('.dials');
+  const setDials = async (digits) => {
+    for (let k = 0; k < 3; k++) {
+      const cur = Number(await page.locator('#modal .dial .val').nth(k).textContent());
+      const up = page.locator('#modal .dial').nth(k).locator('.btn').first();
+      for (let n = 0; n < (digits[k] - cur + 10) % 10; n++) await up.click({ delay: 0 });
+    }
+  };
+  await setDials(literal);
+  await clickBtn('당겨 보기');
+  await expect((await page.locator('#modal .log').first().innerText()).includes('그대로인데'), 'the number as the tape reads it does not open the store');
+  await setDials(combo);
+  await clickBtn('당겨 보기');
+  await T('skip', 80);
+  await waitIdle();
+  await expect((await info()).inv.includes('swHandle') && (await info()).flags['a3.storeOpen'] === true, 'store open, switch handle taken');
+
+  // ---- the switchboard: condenser out, bridge on; measure; then clear the line for the coil
+  const board = async (labels) => {
+    await actAt([[-0.8, 4.95]], -0.8, 5.9, 'walk to the switchboard');
+    await openedPanel('.switch-list');
+    for (const l of labels) await clickBtn(l);
+    await clickBtn('물러나기');
+    await waitIdle();
+  };
+  await board(['② 신호 축전기', '④ 시험']);
+  await expect((await info()).flags['a3.handle'] === true && (await info()).flags['sw.condenser'] === false && (await info()).flags['sw.bridge'] === true, 'handle fitted; condenser bypassed, bridge on');
+  await actAt([[-0.6, 3.9], [-1.4, 1.35]], -1.4, 0.45, 'walk to the bridge');
+  await openedPanel('.galvo-scale');
+  const truth3 = () =>
+    page.evaluate(() => {
+      const g = window.__btk.game;
+      return 3.9 * Math.max(0.12, 0.34 - 0.00008 * Math.max(0, g.playTime - g.state.flags['a3.t0']));
+    });
+  const cycle3 = async (btnText, want) => {
+    for (let i = 0; i < 5; i++) {
+      const b = page.locator('#modal .btn', { hasText: btnText }).first();
+      if ((await b.innerText()).includes(want)) return;
+      await b.click();
+    }
+    await fail(`could not set ${btnText} to ${want}`);
+  };
+  let rec = '';
+  for (let attempt = 0; attempt < 4 && !rec.includes('균형'); attempt++) {
+    await cycle3('비율 팔', '(×0.01)');
+    await cycle3('분류기', '1/999');
+    const t = await truth3();
+    const want = String(Math.round(t / 0.01)).padStart(4, '0').split('').map(Number);
+    for (let i = 0; i < 4; i++) {
+      const cur = Number(await page.locator('#modal .dial .val').nth(i).textContent());
+      const up = page.locator('#modal .dial').nth(i).locator('.btn').first();
+      for (let k = 0; k < (want[i] - cur + 10) % 10; k++) await up.click({ delay: 0 });
+    }
+    await cycle3('분류기', '없음');
+    await clickBtn('측정 기록');
+    rec = await page.locator('#modal .log').first().innerText();
+  }
+  log('bridge:', rec.split('\n')[0]);
+  await expect(rec.includes('균형') && rec.includes('해안 구간'), 'the fault is in the shore section, off the hut');
+  await shot('act3-bridge');
+  await clickBtn('물러나기');
+  await T('skip', 60);
+  await waitIdle();
+  await board(['④ 시험', '① 송수신', '③ 피뢰기', '⑤ 고압']);
+  st = await info();
+  await expect(!st.flags['sw.recorder'] && !st.flags['sw.condenser'] && !st.flags['sw.protector'] && !st.flags['sw.bridge'] && st.flags['sw.coil'] === true, 'the line clear, the coil on it');
+
+  const toBeach = async () => {
+    // Round the coil's trolley (west of it), then out of the door.
+    await go3([[-0.9, 1.75], [-1.0, 3.6], [-3.3, 3.0]], -4.5, 3.0, 'opsroom', 'back to the operating room');
+    await clear3('operating room');
+    await go3([[3.0, 3.0], [0, 1.2], [0, 0.85]], 0, -0.5, 'station', 'out to the yard');
+  };
+  if (pell) {
+    await actAt([[2.4, 1.85]], 1.95, 1.0, 'walk to Pell');
+    await waitIdle();
+    await expect((await info()).flags['a3.pellReady'] === true, 'Pell checks the board and sits at the coil');
+    await toBeach();
+    await clear3('the yard');
+  } else {
+    // Clear the yard first, then come back and light the candle.
+    await toBeach();
+    await clear3('the yard');
+    await go3([[0, 4.6]], 0, 6, 'opsroom', 'back in');
+    await go3([[2.6, 3.8], [3.85, 4.5]], 5, 4.5, 'battery', 'back to the battery room');
+    await actAt([[0.6, 1.55]], 0.6, 2.6, 'walk to the coil');
+    await openedPanel('.coil-status');
+    await clickBtn('양초 타이머 세우기');
+    await clickBtn('물러나기');
+    await T('skip', 40);
+    await waitIdle();
+    await expect((await info()).flags['a3.timerAt'] > 0, 'the candle is burning under the cord');
+    log('candle lit');
+    await toBeach();
+  }
+  log('yard clear, hp', (await info()).hp);
+  await go3([[3.0, 2.4], [8.6, -1.0]], 10, -1.0, 'beach', 'down to the beach');
+  st = await info();
+  await expect(pell ? st.flags['a3.pellReady'] === true : st.flags['a3.timerAt'] > 0, `still armed on reaching the beach (candle ${st.flags['a3.timerAt']})`);
+  const up = await page
+    .waitForFunction(() => window.__btk.info().creatures.some((c) => c.id === 'a3limb') || window.__btk.info().mode === 'ending', null, { timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  await expect(up, 'the limb comes up when I reach the beach armed');
+  log('the limb comes up at the hut', pell ? '' : `(candle: ${Math.max(0, (await info()).flags['a3.timerAt'] - (await page.evaluate(() => window.__btk.game.playTime))).toFixed(0)} s left)`);
+  await page.waitForTimeout(2500);
+  await shot('act3-limb');
+  // The drowned come up out of the surf; meet them well away from the limb.
+  if ((await info()).mode === 'play') {
+    await T('skip', 40);
+    await expect(await T('drive', -4.0, 0.5, 0.3), 'stand off from the limb');
+    for (let i = 0; i < 40 && (await info()).creatures.filter((c) => c.id.startsWith('a3beach') && c.state !== 'gone').length < 2 && (await info()).mode === 'play'; i++) await page.waitForTimeout(400);
+  }
+  if ((await info()).mode === 'play') await clear3('the beach');
+  if (pell) {
+    // Round the hut to its doorway (the limb's reach covers the last steps), in, and key R.
+    await expect(await T('path', [[-0.5, 2.4], [-0.45, 4.35], [2.0, 4.45], [2.0, 3.2], [2.55, 2.65]], 0.25), 'into the cable hut');
+    await T('face', 3.1, 2.95);
+    await T('act');
+    await openedPanel('.hut-log');
+    const key = async (code) => {
+      // The key is held off while signals come back down the line.
+      await page.waitForSelector('#modal .hut-status[data-busy="0"]', { timeout: 15000 });
+      for (const c of code) await clickBtn(c === '.' ? '· 단점' : '− 장점');
+      await clickBtn('보내기');
+    };
+    await key('.-.');
+    await page.waitForFunction(() => (document.querySelector('#modal .hut-log')?.textContent.match(/회선: K/g) ?? []).length >= 2, null, { timeout: 15000 });
+    log('R sent: heard', (await page.locator('#modal .hut-log').innerText()).split('\n').filter((l) => l.startsWith('회선')).join(' / '));
+    await shot('act3-hutkey');
+    await key('.-.');
+  }
+  for (let i = 0; i < 240 && (await info()).mode === 'play'; i++) {
+    if (!pell && (await info()).creatures.some((c) => c.id !== 'a3limb' && c.state !== 'gone' && c.state !== 'dying')) await fight(4000);
+    await T('skip', 3);
+    await page.waitForTimeout(250);
+  }
+  st = await info();
+  await expect(st.mode === 'ending' && st.flags['a3.done'] === true, 'the discharge reached the thing: the act ends');
+  for (let i = 0; i < 24 && (await page.locator('#modal .story .btn', { hasText: '타이틀로' }).count()) === 0; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(300);
+  }
+  await shot('act3-ending');
+  const endText = await page.locator('#modal .story').innerText();
+  await expect(endText.includes('3막 끝') && endText.includes(pell ? 'BELL COVE RESUMES' : '세 번, 쉬고, 세 번'), 'the third act ending shown');
+  log('ACT III ENDING reached. hp', st.hp, 'deaths', (await page.evaluate(() => window.__btk.state().deaths)));
 }
-await shot('ending');
-const endText = await page.locator('#modal .story').innerText();
-await expect(endText.includes('엔딩 2'), 'ending 2 (Pell carried down the ladder) shown');
-log('ENDING reached. flags:', JSON.stringify((await info()).flags).slice(0, 300));
-console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');
-await browser.close();
-server.kill();
-process.exit(errors.length ? 1 : 0);
+
+async function finish() {
+  console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');
+  await browser.close();
+  server.kill();
+  process.exit(errors.length ? 1 : 0);
+}

@@ -4,6 +4,7 @@ import { M } from '../render/materials';
 import { angleDiff, clamp, dampAngle, noise1 } from '../core/math';
 import type { CollisionWorld, Circle } from '../world/collision';
 import type { NavGrid, P2 } from '../world/nav';
+import { limb as limbModel } from '../world/props3';
 
 export type CreatureState = 'rising' | 'hunt' | 'windup' | 'strike' | 'recover' | 'hurt' | 'dying' | 'gone';
 
@@ -47,7 +48,7 @@ export class Creature {
     speed: number,
     delay: number,
     private ev: CreatureEvents,
-    readonly variant: 'crew' | 'captain' = 'crew',
+    readonly variant: 'crew' | 'captain' | 'limb' = 'crew',
     /** Hit points a blow takes from the player. */
     readonly strength = 1,
   ) {
@@ -106,12 +107,26 @@ export class Creature {
             seaweed: true,
           });
     this.object.add(this.rig.root);
+    if (variant === 'limb') {
+      // Not a man at all: the human rig stays hidden and the limb takes its place.
+      this.rig.root.visible = false;
+      const l = limbModel();
+      this.limbRoot = l.root;
+      this.limbSegs = l.segs;
+      this.object.add(l.root);
+      if (this.state === 'rising') l.root.position.y = -4.5;
+    }
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M.shadow.m);
     this.shadow.rotation.x = -Math.PI / 2;
     this.shadow.position.y = 0.016;
     this.object.add(this.shadow);
     if (this.state === 'rising') this.rig.body.position.y = -2.0;
     this.sync();
+  }
+
+  /** How far its blows reach. */
+  get reach(): number {
+    return this.variant === 'limb' ? 3.3 : 1.3;
   }
 
   get alive(): boolean {
@@ -123,7 +138,7 @@ export class Creature {
   }
 
   circle(): Circle {
-    return { x: this.x, z: this.z, r: CREATURE_RADIUS };
+    return { x: this.x, z: this.z, r: this.variant === 'limb' ? 0.5 : CREATURE_RADIUS };
   }
 
   private set(s: CreatureState): void {
@@ -133,6 +148,12 @@ export class Creature {
 
   damage(amount: number, fromX: number, fromZ: number): boolean {
     if (!this.active) return false;
+    if (this.variant === 'limb') {
+      // An axe bites into it and it does not care: it only flinches.
+      this.hp = Math.max(1, this.hp - amount);
+      if (this.state !== 'windup' && this.state !== 'strike') this.set('hurt');
+      return true;
+    }
     this.hp -= amount;
     this.knockDir = Math.atan2(this.x - fromX, this.z - fromZ);
     if (this.hp <= 0) {
@@ -157,6 +178,11 @@ export class Creature {
       return;
     }
     this.object.visible = true;
+    if (this.variant === 'limb') {
+      this.stateTime += dt;
+      this.updateLimb(dt, px, pz, playerAlive, time);
+      return;
+    }
     this.stateTime += dt;
     const dx = px - this.x;
     const dz = pz - this.z;
@@ -281,6 +307,90 @@ export class Creature {
     }
     this.rig.applyPose(pose, rate, dt);
     this.shadow.visible = this.state !== 'rising' || this.stateTime > 0.9;
+    this.sync();
+  }
+
+  private limbRoot: THREE.Group | null = null;
+  private limbSegs: THREE.Group[] = [];
+  private limbCurl = 0;
+
+  /**
+   * The limb never moves from where it comes up. It sways, turns towards the player, rears back and slams
+   * down on anyone within reach; blades only make it flinch. Only kill() (the arc) ends it.
+   */
+  private updateLimb(dt: number, px: number, pz: number, playerAlive: boolean, time: number): void {
+    const root = this.limbRoot!;
+    const dx = px - this.x;
+    const dz = pz - this.z;
+    const dist = Math.hypot(dx, dz);
+    const toPlayer = Math.atan2(dx, dz);
+    // Target curl: + bends towards the player, - rears back.
+    let curl = 0.06;
+    let speed = 4;
+    switch (this.state) {
+      case 'rising': {
+        const t = clamp(this.stateTime / 2.2, 0, 1);
+        root.position.y = -4.5 * (1 - t) * (1 - t);
+        curl = 0.2 * (1 - t);
+        if (t >= 1) this.set('hunt');
+        break;
+      }
+      case 'hunt':
+        this.heading = dampAngle(this.heading, toPlayer, 1.6, dt);
+        curl = 0.05 + Math.sin(time * 0.9 + this.seed) * 0.04;
+        this.growlT -= dt;
+        if (this.growlT <= 0) {
+          this.growlT = 4 + Math.random() * 4;
+          this.ev.onGrowl(this);
+        }
+        // It sways a while between blows: someone watching it can slip past in the gap.
+        if (playerAlive && dist < this.reach && this.stateTime > 1.4 && Math.abs(angleDiff(this.heading, toPlayer)) < 0.6) this.set('windup');
+        break;
+      case 'windup':
+        this.heading = dampAngle(this.heading, toPlayer, 3, dt);
+        curl = -0.2;
+        speed = 6;
+        if (this.stateTime > 0.85) {
+          this.set('strike');
+          this.ev.onStrike(this);
+        }
+        break;
+      case 'strike':
+        curl = 0.32;
+        speed = 22;
+        if (this.stateTime > 0.3) this.set('recover');
+        break;
+      case 'recover':
+        curl = 0.18;
+        speed = 3;
+        if (this.stateTime > 1.0) this.set('hunt');
+        break;
+      case 'hurt':
+        curl = -0.12;
+        speed = 14;
+        if (this.stateTime > 0.5) this.set('hunt');
+        break;
+      case 'dying': {
+        const t = clamp(this.stateTime / 2.8, 0, 1);
+        curl = 0.12 + Math.sin(this.stateTime * 18) * 0.15 * (1 - t);
+        root.position.y = -4.8 * Math.max(0, t - 0.35) * 1.5;
+        if (t >= 1) {
+          this.set('gone');
+          this.object.visible = false;
+          this.ev.onDead(this);
+        }
+        break;
+      }
+      case 'gone':
+        return;
+    }
+    this.limbCurl += (curl - this.limbCurl) * Math.min(1, speed * dt);
+    this.limbSegs.forEach((s, i) => {
+      const wave = Math.sin(time * 1.7 - i * 0.55 + this.seed) * 0.1 * (this.state === 'dying' ? 2 : 1);
+      s.rotation.x = this.limbCurl * (0.6 + i * 0.08) + wave;
+      s.rotation.z = Math.sin(time * 1.1 - i * 0.4) * 0.05;
+    });
+    this.shadow.visible = false;
     this.sync();
   }
 

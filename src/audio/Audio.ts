@@ -420,6 +420,59 @@ export class AudioSystem {
         this.burst(t, 0.9, 'lowpass', 1400, 0.8, 0.6 * v, 0.6, 0.01);
         this.burst(t + 0.1, 1.2, 'bandpass', 600, 1, 0.3 * v, 0.6, 0.1);
         break;
+      // ---- Act 3
+      case 'step-snow':
+        // Crunch: a dull thump and a crackle of crust.
+        this.burst(t, 0.09, 'lowpass', 500, 1, 0.14 * v, 0.1);
+        this.burst(t + 0.01, 0.07, 'bandpass', 3200 + Math.random() * 800, 2, 0.07 * v, 0.1);
+        break;
+      case 'step-shingle':
+        for (let i = 0; i < 3; i++) this.burst(t + i * 0.02 + Math.random() * 0.02, 0.04, 'bandpass', 1800 + Math.random() * 1600, 4, 0.08 * v, 0.2);
+        break;
+      case 'tick':
+        this.burst(t, 0.02, 'highpass', 3000, 1, 0.05 * v, 0.3, 0.001);
+        break;
+      case 'recorder':
+        // The clockwork tape drive running down.
+        for (let i = 0; i < 10; i++) this.burst(t + i * 0.06, 0.025, 'bandpass', 2200, 6, 0.05 * v, 0.2, 0.001);
+        this.tone(t, 160, 0.7, 'square', 0.012 * v, 0.2, 120, 0.05);
+        break;
+      case 'coil':
+        // Interrupter buzzing on the induction coil.
+        this.tone(t, 120, 1.0, 'sawtooth', 0.05 * v, 0.2, 128, 0.02);
+        this.tone(t, 240, 1.0, 'square', 0.015 * v, 0.2, 250, 0.02);
+        this.burst(t, 1.0, 'bandpass', 4200, 3, 0.03 * v, 0.2, 0.02);
+        break;
+      case 'arc': {
+        // A high-tension discharge: a crack, then the crackle and the hum of the arc, then thunder in the hut.
+        this.burst(t, 0.08, 'highpass', 2500, 0.8, 0.9 * v, 0.6, 0.001);
+        for (let i = 0; i < 18; i++) this.burst(t + 0.05 + i * 0.06 + Math.random() * 0.04, 0.05, 'highpass', 3000 + Math.random() * 3000, 1, 0.25 * v, 0.6, 0.001);
+        this.tone(t, 100, 1.6, 'sawtooth', 0.08 * v, 0.6, 60, 0.01);
+        this.burst(t + 0.1, 1.8, 'lowpass', 160, 1, 0.6 * v, 0.8, 0.05);
+        break;
+      }
+      case 'match':
+        this.burst(t, 0.12, 'bandpass', 3500, 1.5, 0.2 * v, 0.2, 0.002);
+        this.burst(t + 0.1, 0.6, 'lowpass', 900, 1, 0.08 * v, 0.2, 0.05);
+        break;
+      case 'hydrometer':
+        // Rubber bulb squeezed, acid drawn up the glass.
+        this.burst(t, 0.15, 'lowpass', 400, 1, 0.12 * v, 0.2, 0.02);
+        this.tone(t + 0.15, 900, 0.25, 'sine', 0.03 * v, 0.4, 1400);
+        break;
+      case 'tentacle':
+        this.burst(t, 0.7, 'lowpass', 700, 1, 0.4 * v, 0.6, 0.05);
+        this.burst(t + 0.1, 0.5, 'bandpass', 300, 2, 0.25 * v, 0.6, 0.05);
+        this.tone(t, 70, 0.8, 'sawtooth', 0.04 * v, 0.6, 45, 0.1);
+        break;
+      case 'gust':
+        this.burst(t, 2.4, 'bandpass', 600 + Math.random() * 400, 0.8, 0.12 * v, 0.2, 0.8);
+        break;
+      case 'knife':
+        // A knife switch thrown home.
+        this.burst(t, 0.05, 'bandpass', 1800, 3, 0.25 * v, 0.3, 0.001);
+        this.tone(t, 400, 0.08, 'square', 0.02 * v, 0.3, 300, 0.001);
+        break;
       default:
         break;
     }
@@ -557,6 +610,29 @@ export class AudioSystem {
         this.loopNoise(bed, 'bandpass', 95, 2, 0.25);
         this.every(bed, 0.3, 1.4, () => this.burstPublic(0.02, 'highpass', 3500, 0.05));
         this.every(bed, 3, 8, () => this.sfx('drip', { volume: 0.6 }));
+        break;
+      case 'snow':
+        // Wind over open ground, gusting; the sea far off below the cliff.
+        this.loopNoise(bed, 'bandpass', 520, 0.7, 0.16, 0.13, 0.12);
+        this.loopNoise(bed, 'lowpass', 220, 0.7, 0.12, 0.07, 0.06);
+        this.loopNoise(bed, 'highpass', 4200, 0.7, 0.012, 0.2, 0.01);
+        this.every(bed, 7, 14, () => this.sfx('gust', { volume: 0.8 }));
+        break;
+      case 'shore':
+        // Surf on shingle: the drag of each wave, the wind.
+        this.loopNoise(bed, 'lowpass', 600, 0.8, 0.3, 0.12, 0.25);
+        this.loopNoise(bed, 'bandpass', 1800, 0.9, 0.06, 0.12, 0.05);
+        this.loopNoise(bed, 'bandpass', 520, 0.7, 0.08, 0.17, 0.06);
+        this.every(bed, 9, 16, () => this.sfx('gust', { volume: 0.6 }));
+        break;
+      case 'station':
+        // Inside the station: the stove, the wind against the windows, a clock somewhere.
+        this.loopNoise(bed, 'lowpass', 180, 0.7, 0.08, 0.1, 0.05);
+        this.loopNoise(bed, 'bandpass', 700, 0.8, 0.025, 0.15, 0.02);
+        this.drone(bed, 45, 'sine', 0.02);
+        this.every(bed, 0.95, 1.05, () => this.sfx('tick', { volume: 0.5 }));
+        this.every(bed, 6, 12, () => this.sfx('creak', { volume: 0.5 }));
+        this.every(bed, 20, 40, () => this.sfx('knock3', { volume: 0.35 }));
         break;
       case 'hold':
         this.loopNoise(bed, 'bandpass', 320, 1.5, 0.08, 0.35, 0.06);

@@ -1,5 +1,5 @@
 import type { Game } from '../game/Game';
-import { latestSave, readSlot, formatTime, type Settings, type SlotId } from '../game/state';
+import { latestSave, readProgress, readSlot, formatTime, type Settings, type SlotId } from '../game/state';
 import { ROOMS } from '../world/rooms';
 import { FocusNav, type Modal } from './UI';
 import { button, h } from './dom';
@@ -23,6 +23,7 @@ export function openTitle(g: Game): Modal {
       g.ui.pop(modal);
       void g.continueLatest();
     }, { disabled: !has }),
+    ...(readProgress().act >= 2 ? [button('막 선택', () => openChapters(g, modal))] : []),
     button('조작법', () => openHelp(g)),
     button('설정', () => openSettings(g)),
   );
@@ -53,6 +54,35 @@ export function openTitle(g: Game): Modal {
     },
   });
   return modal;
+}
+
+/** Start from the beginning of any act this browser has already reached. */
+function openChapters(g: Game, title: Modal): void {
+  const p = readProgress();
+  const start = async (act: number) => {
+    if (latestSave()) {
+      const ok = await confirmBox(g, '막을 골라 시작하면 처음 문을 지날 때 자동 기록이 새 진행으로 바뀝니다(수동 기록은 남습니다). 시작할까요?');
+      if (!ok) return;
+    }
+    g.ui.pop(modal);
+    g.ui.pop(title);
+    void g.startChapter(act, p.pell);
+  };
+  const acts: Array<[number, string, string]> = [
+    [1, '1막 · 용골 아래', '1925년 10월 · 탈라사호'],
+    [2, '2막 · 선수창 아래', '같은 밤 · 선수'],
+    [3, '3막 · 뭍으로', '1926년 2월 · 벨 코브 양륙국'],
+  ];
+  const list = h(
+    'div',
+    { class: 'menu', style: 'display:flex;flex-direction:column;gap:6px' },
+    ...acts.map(([n, name, when]) => button(`${name} — ${when}`, () => void start(n), { disabled: n > p.act })),
+    button('돌아가기', () => g.ui.pop(modal)),
+  );
+  const note = p.act >= 3 ? `3막은 2막 끝의 선택을 따릅니다: ${p.pell ? '펠과 함께 내려왔다' : '혼자 내려왔다'}.` : '도달한 막부터 다시 시작할 수 있습니다.';
+  const el = h('div', { class: 'modal' }, h('div', { class: 'panel', style: 'width:min(520px,100%)' }, h('div', { class: 'eyebrow', text: 'CHAPTERS · 막 선택' }), h('p', { class: 'muted', text: note }), list));
+  const nav = new FocusNav(list, g.audio);
+  const modal = g.ui.push({ el, nav });
 }
 
 // ------------------------------------------------------------------ Narrative screens
@@ -135,23 +165,20 @@ export async function playIntro(g: Game): Promise<void> {
   ]);
 }
 
-export async function playEnding(g: Game): Promise<void> {
+/** The end of the second act: the boat, the report, what became of Pell. Then the third act begins. */
+export async function playInterlude(g: Game, withPell: boolean): Promise<void> {
   g.audio.setDanger(false);
   g.audio.setAmbience('title');
-  const st = g.state;
-  const withPell = g.flag('pellCarried');
   const lines = withPell
     ? [
         '나는 펠을 업고 줄사다리를 내려갔다. 보트에 앉자마자 그는 정신을 잃었다. 잠든 얼굴로도 손가락만은 쉬지 않고 무언가를 두드리고 있었다.',
         '보고서에는 두 사람의 증언이 실렸다. 아무도 믿지 않았지만, 누구도 반박하지 못했다.',
-        '펠은 다시는 배를 타지 않았다. 다만 해마다 10월이면 해안 무선국 수신기 앞에 밤새 앉아 있다고 한다. 공전 잡음 속에서 누군가 그를 흉내 내지 않는지 들으며.',
-        '— 엔딩 2 · 두 사람의 증언 —',
+        '펠은 다시는 배를 타지 않겠다고 했다. 다리가 낫자 그는 뭍의 케이블국에 자리를 구했다. 바다 위가 아니라, 바다를 건너온 신호를 듣는 자리를.',
       ]
     : [
         '줄사다리를 내려가기 직전, 선수 쪽에서 두드리는 소리가 들렸다. 세 번, 쉬고, 세 번.',
         '나는 돌아보지 않았다.',
         '보고서에는 "생존자 없음"이라고 적었다. 그 두드림이 사람의 것이었는지 흉내였는지, 나는 끝내 확인하지 않았다.',
-        '— 엔딩 1 · 홀로 내려가다 —',
       ];
   await story(
     g,
@@ -160,7 +187,57 @@ export async function playEnding(g: Game): Promise<void> {
       '그 밤의 나머지는 길고 조용했다. 배는 더 이상 끌려가지 않았고, 어디서도 두드리는 소리는 들리지 않았다.',
       '동틀 무렵, 안개를 가르며 마그누스호의 기적이 울렸다.',
       ...lines,
-      `플레이 시간 ${formatTime(st.time)} · 기록 ${st.saves}회 · 죽음 ${st.deaths}회 · 읽은 문서 ${st.docs.length}편`,
+      '탈라사호가 놓아 보낸 케이블의 끝은 깊은 바다 밑으로 가라앉았다. 그것을 쥔 채로.',
+      '— 2막 끝 —',
+    ],
+    { bg: 'rgba(8,10,12,0.96)' },
+  );
+}
+
+/** The third act's opening: four months later, a telegram, a sleigh, a dark station in the snow. */
+export async function playLandfallIntro(g: Game, withPell: boolean): Promise<void> {
+  g.audio.setAmbience('snow');
+  await story(
+    g,
+    '1926년 2월 27일 · 뉴펀들랜드, 트리니티만',
+    [
+      '탈라사호의 밤으로부터 넉 달.',
+      '12월, 회사의 수리선이 가라앉은 케이블 끝을 건져 새 케이블을 이었다. 회선은 다시 대서양을 건너 신호를 실어 날랐다.',
+      '그리고 2월, 런던에서 전보가 왔다. 벨 코브 양륙국이 교신을 끊었다고. 마지막 전문은 단 한 줄이었다. IT COMES ASHORE — 그것이 뭍으로 온다.',
+      withPell
+        ? '전문 끝에는 서명이 있었다. TP — 벨 코브의 야간 통신사, 토머스 펠.'
+        : '캐리긴국의 기록지에는 그 전문 뒤로 한 줄이 더 찍혀 있었다고 한다. 세 번, 쉬고, 세 번. 탈라사호의 선원 거주구에 두고 온 그 소리다.',
+      '썰매꾼은 역 마당 앞에서 말을 돌렸다. 저 집에는 들어가지 않겠다고 했다.',
+      '눈이 내린다. 바다 쪽에서, 무언가 아주 무거운 것이 자갈을 끄는 소리가 들린다.',
+    ],
+    { bg: 'rgba(6,8,12,0.96)' },
+  );
+}
+
+export async function playEnding(g: Game): Promise<void> {
+  g.audio.setDanger(false);
+  g.audio.setAmbience('title');
+  const st = g.state;
+  const stats = `플레이 시간 ${formatTime(st.time)} · 기록 ${st.saves}회 · 죽음 ${st.deaths}회 · 읽은 문서 ${st.docs.length}편`;
+  const withPell = g.flag('a3.pell');
+  await story(
+    g,
+    '1926년 2월 28일 · 벨 코브',
+    [
+      '날이 밝자 해변에는 검게 그을린 케이블과, 사람 키만 한 숯덩이 같은 것이 남아 있었다. 썰물이 그것을 데려갔다.',
+      ...(withPell
+        ? [
+            '펠은 그날 아침 캐리긴에 전문을 보냈다. BELL COVE RESUMES. 캐리긴은 곧바로 R로 답했다.',
+            '…조금 뒤, 같은 R이 한 번 더 찍혔다. 메아리처럼. 펠은 기록지를 오래 들여다보다가, 말없이 찢어 난로에 넣었다.',
+          ]
+        : [
+            '나는 서툰 손으로 캐리긴에 전문을 보냈다. BELL COVE RESUMES. 캐리긴은 R로 답했다.',
+            '…조금 뒤, 기록지에 한 줄이 더 찍혔다. 세 번, 쉬고, 세 번.',
+          ]),
+      '불꽃이 태운 것은 그것의 손 하나였다. 케이블 저편, 탈라사호가 케이블을 놓아 보낸 바다 밑 어딘가에 그것의 뿌리가 남아 있다.',
+      '회사는 봄에 수리선을 보내 그 구간을 끌어올리기로 했다. 나는 그 배에 타겠다고 했다.',
+      '— 3막 끝 · 4막에서 계속 —',
+      stats,
     ],
     { finalButtons: [['타이틀로', () => g.showTitle()]], bg: 'rgba(8,10,12,0.96)' },
   );

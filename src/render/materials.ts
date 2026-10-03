@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Tex, TILE } from './textures';
+import { Tex, Tex3, TILE } from './textures';
 
 /** A material plus the real-world size (metres) one texture repeat covers, used for UV scaling. */
 export interface Mat {
@@ -64,6 +64,27 @@ export const M = {
   get gauge() { return lambert('gauge', 0xffffff, Tex.gauge(191), 1); },
   get morse() { return lambert('morse', 0xffffff, Tex.morseChart(211), 1); },
   get idol() { return lambert('idol', 0xffffff, Tex.idol(201), 1, { emissive: 0x0a2418 }); },
+
+  // Act 3
+  get snow() { return lambert('snow', 0xffffff, Tex3.snow(301), TILE.snow); },
+  get plaster() { return lambert('plaster', 0xffffff, Tex3.plaster(), TILE.plaster); },
+  get clapboard() { return lambert('clapboard', 0xffffff, Tex3.clapboard('#c8bfa8', 311), TILE.clapboard); },
+  get clapboardRed() { return lambert('clapboardRed', 0xffffff, Tex3.clapboard('#8a3a2a', 312), TILE.clapboard); },
+  get shingle() { return lambert('shingle', 0xffffff, Tex3.shingle(321), TILE.shingle); },
+  get concrete() { return lambert('concrete', 0xffffff, Tex3.concrete(331), TILE.concrete); },
+  get slate() { return lambert('slate', 0xffffff, Tex3.slate(341), 1); },
+  get tape() { return lambert('tape', 0xffffff, Tex3.tape(351), 1); },
+  get roofTar() { return lambert('roofTar', 0x2a2a2c); },
+  get jarGlass() { return lambert('jarGlass', 0x6a8a80, undefined, 1, { transparent: true, opacity: 0.75 }); },
+  get acid() { return lambert('acid', 0x9ab0a0); },
+  get leadPlate() { return lambert('leadPlate', 0x4a4c50); },
+  get rubber() { return lambert('rubber', 0x2a1c18); },
+  // Black and wet: a faint green-grey glow keeps its shape readable against the night sea.
+  get flesh() { return lambert('flesh', 0x26332e, undefined, 1, { emissive: 0x0c1814 }); },
+  get fleshPale() { return lambert('fleshPale', 0x5a6a5e); },
+  get ice() { return lambert('ice', 0x9fb6c0, undefined, 1, { transparent: true, opacity: 0.85 }); },
+  get windowLit() { return basic('windowLit', 0xd8a050, { fog: true }); },
+  get arc() { return basic('arc', 0xbcd8ff); },
 
   get brass() { return lambert('brass', 0xa8843a); },
   get copper() { return lambert('copper', 0x8a4c2c); },

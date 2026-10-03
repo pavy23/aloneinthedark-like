@@ -875,3 +875,80 @@ kbd {
     transition: none;
   }
 }
+
+/* Act 3 panels */
+.tape-strip {
+  display: block;
+  width: min(480px, 100%);
+  height: auto;
+  margin: 0.6em auto 0.4em;
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
+  image-rendering: auto;
+}
+.rack-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0.5em 0;
+}
+.rack-grid .cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1em;
+  padding: 0.3em 0.1em;
+  font-size: 0.8em;
+  min-width: 0;
+}
+.rack-grid .cell .no {
+  font-family: var(--font-label);
+  color: var(--brass-dim);
+}
+.rack-grid .cell .sg {
+  font-family: var(--font-type);
+  font-variant-numeric: tabular-nums;
+  color: #f3e3b8;
+}
+.rack-grid .cell .mark {
+  font-size: 0.8em;
+  color: var(--verdigris);
+  min-height: 1em;
+}
+.rack-status,
+.coil-status {
+  font-family: var(--font-type);
+  font-variant-numeric: tabular-nums;
+  color: #f3e3b8;
+  margin: 0.3em 0 0.5em;
+}
+.coil-status div {
+  padding: 0.1em 0;
+}
+.switch-list {
+  grid-template-columns: 1fr;
+}
+.switch-list .btn {
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hut-log {
+  font-family: var(--font-type);
+  font-size: 0.88em;
+  min-height: 6em;
+}
+
+.hut-status {
+  text-align: center;
+  font-size: 0.85em;
+  color: var(--bone-dim);
+  margin-top: 0.4em;
+}
+.hut-status[data-busy='1'] {
+  color: var(--brass);
+}
+.morse-key.off {
+  opacity: 0.45;
+}

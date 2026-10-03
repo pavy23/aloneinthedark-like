@@ -1,6 +1,6 @@
 // Headless screenshot tour: title screen + every fixed camera of every room, then the follow camera at
 // every spawn point (doorways are where a follow camera most easily ends up outside the room).
-// Usage: node scripts/shots.mjs [roomFilter]
+// Usage: node scripts/shots.mjs [room[,room…]]   (ACT=2 or ACT=3 sets that act's state first)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
@@ -29,12 +29,20 @@ const setCamera = (camera) =>
     const g = window.__btk.game;
     g.applySettings({ ...g.settings, camera });
   }, camera);
-const rooms = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2'].filter((r) => !filter || r === filter);
+const ALL_ROOMS = ['deck', 'bridge', 'corridor', 'cabin', 'radio', 'engine', 'hold', 'fcsle', 'testroom', 'tank2', 'station', 'opsroom', 'battery', 'beach'];
+const rooms = ALL_ROOMS.filter((r) => !filter || filter.split(',').includes(r));
 // ACT=2 shows every room as it is in the second act (power on, the stone burned, tank No.2 drained).
 if (process.env.ACT === '2')
   await page.evaluate(() =>
     window.__btk.setFlags({ power: true, idolBurned: true, act2: true, 'a2.t0': 0, tank2Drained: true, tank2Open: true, 'vc.level': 0 }),
   );
+// ACT=3 (PELL=1 for the operator's version): Bell Cove as found.
+if (process.env.ACT === '3')
+  await page.evaluate((pell) => {
+    const b = window.__btk;
+    b.game.state.flags = {};
+    b.setFlags({ act3: true, 'a3.pell': pell, 'a3.t0': 0, 'a3.seed': 1234, 'a3.combo': 472, 'sw.recorder': true, 'sw.condenser': true, 'sw.protector': true });
+  }, process.env.PELL === '1');
 await setCamera('fixed');
 for (const room of rooms) {
   await page.evaluate((r) => window.__btk.play(r), room);

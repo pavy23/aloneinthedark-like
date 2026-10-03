@@ -340,7 +340,7 @@ export const deck: RoomDef = {
           if (c !== 0) return;
         }
         gg.sfx('ladder');
-        await gg.ending();
+        await gg.nextAct();
       },
     });
     look(b, 'prints', 3.6, 2.8, '젖은 발자국', ['우현 난간 너머에서부터 이어진 젖은 발자국. 맨발이다.', '바다에서 기어 올라온 누군가의 발자국이, 해치 앞에서 끊겨 있다.']);
